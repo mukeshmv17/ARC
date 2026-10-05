@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Acharya's Robotics Club — Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="loading-screen" id="portalLoader"><div class="loading-glow"></div><img src="assets/club-logo.jpeg" alt="Acharya Robotics Club"><div class="loader-ring"></div><span>INITIALIZING ROBOTICS PORTAL</span></div>
+
+<!-- ======================= LOGIN ======================= -->
+<div id="viewLogin" class="shell">
+  <aside class="rail">
+    <div>
+      <div class="logos">
+        <img class="admin-brand-logo" src="assets/ait-logo.jpeg" alt="Acharya Institute of Technology">
+        <div class="logo-divider"></div>
+        <img class="admin-brand-logo" src="assets/club-logo.jpeg" alt="Acharya's Robotic Club">
+      </div>
+      <div class="rail-body">
+        <p class="rail-eyebrow">Acharya Institute of Technology</p>
+        <h1 class="rail-title">Acharya's Robotic Club</h1>
+        <p class="rail-copy">BUILD | INNOVATE | INSPIRE</p>
+      </div>
+    </div>
+    <p class="rail-fineprint">Club Members Only!</p>
+  </aside>
+
+  <main class="stage">
+    <div class="card">
+      <div class="card-head">
+        <h1 id="formTitle">Welcome back</h1>
+        <p id="formSubtitle">Sign in with your club credentials to continue.</p>
+      </div>
+
+      <div class="segmented" role="tablist">
+        <button type="button" id="tabUser" class="active">Student / Member</button>
+        <button type="button" id="tabAdmin">Admin</button>
+      </div>
+
+      <div class="notice" id="adminNotice" style="display:none;">
+      </div>
+
+      <!-- Admin: email + password -->
+      <form id="adminLoginForm" class="hidden" novalidate>
+        <div class="field">
+          <label for="adminEmail">Email address</label>
+          <input type="email" id="adminEmail" required placeholder="Enter admin email">
+        </div>
+        <div class="field">
+          <label for="adminPassword">Password</label>
+          <input type="password" id="adminPassword" required placeholder="Enter password">
+        </div>
+        <p class="error" id="adminFormError">Invalid login credentials.</p>
+        <button type="submit" class="submit">Sign in</button>
+      </form>
+
+      <!-- Member: AUID + phone number -->
+      <form id="memberLoginForm" novalidate>
+        <div class="field">
+          <label for="memberAuid">AUID</label>
+          <input type="text" id="memberAuid" required placeholder="e.g. AU21CS045">
+        </div>
+        <div class="field">
+          <label for="memberPhone">Phone number</label>
+          <input type="tel" id="memberPhone" required placeholder="+91 98765 43210">
+        </div>
+        <p class="error" id="memberFormError">Invalid login credentials.</p>
+        <button type="submit" class="submit">Sign in</button>
+        <button type="button" class="link-btn" id="showSignup">New here? Create an account</button>
+      </form>
+    </div>
+  </main>
+</div>
+
+<!-- ======================= SIGN-UP ======================= -->
+<div id="viewSignup" class="shell hidden">
+  <aside class="rail">
+    <div>
+      <div class="logos">
+        <img class="admin-brand-logo" src="assets/ait-logo.jpeg" alt="Acharya Institute of Technology">
+        <div class="logo-divider"></div>
+        <img class="admin-brand-logo" src="assets/club-logo.jpeg" alt="Acharya's Robotic Club">
+      </div>
+      <div class="rail-body">
+        <p class="rail-eyebrow">Acharya Institute of Technology</p>
+        <h1 class="rail-title">Create your member account</h1>
+        <p class="rail-copy">You'll need the current registration code from your club admin to sign up.</p>
+      </div>
+    </div>
+    <p class="rail-fineprint">Once created, sign in with your AUID and phone number.</p>
+  </aside>
+  <main class="stage">
+    <div class="card">
+      <div class="card-head">
+        <h1>Create account</h1>
+        <p>Enter your details to join the club portal.</p>
+      </div>
+      <form id="signupForm" class="reg-grid" novalidate style="margin-top:20px;">
+        <div class="field"><label>Full name</label><input type="text" id="suName" required></div>
+        <div class="field"><label>AUID</label><input type="text" id="suAuid" required placeholder="e.g. AU21CS045"></div>
+        <div class="field"><label>USN</label><input type="text" id="suUsn" required placeholder="e.g. 1AY21CS045"></div>
+        <div class="field"><label>Department</label><input type="text" id="suDept" required placeholder="e.g. Mechatronics"></div>
+        <div class="field"><label>College</label><input type="text" id="suCollege" required placeholder="e.g. Acharya Institute of Technology"></div>
+        <div class="field"><label>Phone number</label><input type="tel" id="suPhone" required placeholder="+91 98765 43210"></div>
+        <div class="field" style="grid-column:1/-1;"><label>Registration code</label><input type="text" id="suCycleCode" required placeholder="6-digit code from your admin"></div>
+        <p class="error" id="signupError" style="grid-column:1/-1;">Something went wrong.</p>
+        <div class="field" style="grid-column:1/-1;"><button type="submit" class="submit">Create account</button></div>
+        <div class="field" style="grid-column:1/-1;"><button type="button" class="link-btn" id="backToLogin">&larr; Back to sign in</button></div>
+      </form>
+    </div>
+  </main>
+</div>
+
+<!-- ======================= APP ======================= -->
+<div id="viewApp" class="hidden app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand"><img class="admin-sidebar-logo" src="assets/club-logo.jpeg" alt="Acharya's Robotic Club"><span>ARC</span></div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-page="events">Events</button>
+      <button class="nav-item" data-page="schedule">Schedule</button>
+      <button class="nav-item" data-page="register">Register Team</button>
+      <button class="nav-item hidden" id="navUsers" data-page="users">Manage Users</button>
+      <button class="nav-item hidden" id="navSettings" data-page="settings">Settings</button>
+    </nav>
+    <div class="sidebar-foot">
+      <span class="user-name" id="userNameLabel"></span>
+      <span class="role-badge" id="roleBadge">Member</span>
+      <button class="btn btn-sm" id="logoutBtn" style="margin-top:10px;width:100%;">Logout</button>
+    </div>
+  </aside>
+  <button class="sidebar-overlay" id="sidebarOverlay" type="button" aria-label="Close navigation"></button>
+
+  <div class="app-main">
+    <div class="topbar">
+      <button class="btn btn-sm sidebar-menu-btn" id="sidebarToggle" type="button" aria-label="Toggle navigation">&#9776;</button>
+      <div class="topbar-title" id="topbarTitle">Events</div>
+    </div>
+
+    <!-- Events dashboard -->
+    <div class="page" id="pageEvents">
+      <div class="page-head">
+        <div>
+          <h1>Ongoing Events</h1>
+          <!-- <p>Local live events stored in your database.</p> -->
+        </div>
+        <div class="head-actions">
+          <button class="btn hidden" id="exportAllBtn">Export All (Results + Teams)</button>
+          <button class="btn btn-primary hidden" id="addEventBtn">+ Add Event</button>
+        </div>
+      </div>
+      <div class="events-grid" id="eventsGrid"></div>
+      <div class="empty-state hidden" id="eventsEmpty">No events yet. Add one to get started.</div>
+    </div>
+
+    <!-- Schedule management page -->
+    <div class="page hidden" id="pageSchedule">
+      <div class="page-head">
+        <div><h1>Schedule</h1><p>Publish event rounds, reporting times, venues and important slots to the Team Registration Portal.</p></div>
+        <button class="btn btn-primary" id="addScheduleBtn">+ Add Schedule</button>
+      </div>
+      <div class="panel">
+        <div class="schedule-admin-list" id="scheduleAdminList"><p class="panel-hint">Loading schedule…</p></div>
+      </div>
+    </div>
+
+    <!-- General Register page -->
+    <div class="page hidden" id="pageRegister">
+      <div class="page-head">
+        <div><h1>Register a team</h1><p>Pick the event, then add 2–4 team members with their details.</p></div>
+        <button class="btn hidden" id="exportTeamTypeBtn">Export Teams (Internal / External)</button>
+      </div>
+      <div class="panel">
+        <form id="regForm">
+          <div class="reg-grid">
+            <div class="field"><label>Event</label><select id="rEvent" required></select></div>
+            <div class="field"><label>Team name</label><input type="text" id="rTeamName" placeholder="e.g. RoboRacer Alpha" required></div>
+            <div class="field"><label>College</label><input type="text" id="rCollege" placeholder="e.g. Acharya Institute of Tech" required></div>
+          </div>
+
+          <div class="field" style="margin-top:14px;">
+            <label>Team type</label>
+            <div class="segmented team-type-toggle" role="radiogroup">
+              <button type="button" class="team-type-opt active" data-type="internal">Internal <span>— within college</span></button>
+              <button type="button" class="team-type-opt" data-type="external">External <span>— outside college</span></button>
+            </div>
+            <input type="hidden" id="rTeamType" value="internal">
+          </div>
+
+          <div id="membersWrap"></div>
+
+          <div style="margin-top:10px;display:flex;gap:10px;">
+            <button type="button" class="btn btn-sm" id="addMemberBtn">+ Add member</button>
+            <button type="button" class="btn btn-sm" id="removeMemberBtn">− Remove member</button>
+          </div>
+
+          <p class="error" id="regFormError" style="margin-top:14px;">Fill in all required fields.</p>
+          <p class="success-msg hidden" id="regFormSuccess">Team registered successfully!</p>
+          <button type="submit" class="btn btn-primary" style="margin-top:14px;">+ Register Team</button>
+        </form>
+      </div>
+      <div class="panel register-registered-panel">
+        <div class="division-head"><div><p class="eyebrow">PUBLIC REGISTRATION</p><h2>Registered Teams</h2><p class="panel-hint">Live registrations submitted through the Team Registration Portal.</p></div><span class="division-count" id="registerTeamCount">0</span></div>
+        <div class="admin-list" id="registerTeamsList"><p class="panel-hint">Loading registered teams…</p></div>
+      </div>
+    </div>
+
+    <!-- Event timer / roster page -->
+    <div class="page hidden" id="pageTimer">
+      <button class="back-link" id="backToEvents">&larr; Back to Events</button>
+      <div class="page-head">
+        <div>
+          <h1 id="timerEventName">Event</h1>
+          <p id="timerEventDesc"></p>
+        </div>
+        <button class="btn btn-primary" id="exportExcelBtn">Export Excel Report</button>
+      </div>
+
+      <div class="panel">
+        <h2>Roster &amp; Live Timer (<span id="totalCount">0</span> Registered)</h2>
+        <p class="panel-hint">Tap on any team below to open the Stopwatch Controls and view complete team details.</p>
+        <div class="team-list" id="teamListContainer"></div>
+        <div class="desktop-table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Team</th><th>College</th><th>Type</th><th>Members</th><th id="valueColHeader">Time</th><th>Payment</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="rosterBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Event Rankings</h2>
+        <div class="podium-grid" id="podiumGrid"></div>
+      </div>
+    </div>
+
+    <!-- Manage Users page -->
+    <div class="page hidden" id="pageUsers">
+      <div class="page-head"><div><h1>Manage Users</h1><p>Admin accounts and self-registered members.</p></div></div>
+      <div class="panel">
+        <h2>Add admin / user directly</h2>
+        <form id="addUserForm" class="reg-grid">
+          <div class="field"><label>Full Name</label><input type="text" id="uName" required></div>
+          <div class="field"><label>Email</label><input type="email" id="uEmail" required></div>
+          <div class="field"><label>Password</label><input type="password" id="uPassword" required></div>
+          <div class="field"><label>Role</label>
+            <select id="uRole"><option value="member">Student / Member</option><option value="admin">Admin</option></select>
+          </div>
+          <div class="field" style="align-self:end;"><button type="submit" class="btn btn-primary" style="width:100%;">+ Create User</button></div>
+        </form>
+      </div>
+      <div class="panel user-division">
+        <div class="division-head"><div><p class="eyebrow">CLUB ACCESS</p><h2>Club Members</h2><p class="panel-hint">Students and club members who have an internal Robotics Club account.</p></div><span class="division-count" id="clubMemberCount">0</span></div>
+        <div class="admin-list" id="clubMembersList"></div>
+      </div>
+      <div class="panel user-division">
+        <div class="division-head"><div><p class="eyebrow">TEAM PORTAL</p><h2>Team Registration Accounts &amp; Teams</h2><p class="panel-hint">Google/email accounts created on the Team Registration Portal, followed by their submitted team registrations.</p></div><span class="division-count" id="registeredTeamCount">0</span></div>
+        <div class="subdivision">
+          <div class="subdivision-head"><div><h3>Signed-in Accounts</h3><p class="panel-hint">External/team-registration accounts. Google accounts appear here automatically after successful sign-in.</p></div><span class="mini-count" id="teamAccountCount">0</span></div>
+          <div class="admin-list" id="teamAccountsList"></div>
+        </div>
+        <div class="subdivision">
+          <div class="subdivision-head"><div><h3>Registered Teams</h3><p class="panel-hint">Teams that have actually submitted registration.</p></div><span class="mini-count" id="registeredTeamListCount">0</span></div>
+          <div class="admin-list" id="registeredTeamsList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings page -->
+    <div class="page hidden" id="pageSettings">
+      <div class="page-head"><div><h1>Settings</h1><p>Control registrations, contacts and club-wide exports.</p></div></div>
+      <div class="panel registration-control">
+        <div><p class="eyebrow">REGISTRATION CONTROL</p><h2>Team Registration</h2><p class="panel-hint">One switch controls whether teams can submit registrations from the public portal.</p></div>
+        <label class="switch"><input type="checkbox" id="registrationOpenToggle"><span></span></label>
+        <strong id="registrationOpenLabel">OPEN</strong>
+      </div>
+      <div class="cycle-card">
+        <p class="cycle-label">Student Registration Code</p><p class="cycle-code" id="cycleCodeDisplay">------</p><p class="cycle-copy">Share this code with students so they can create an internal portal account.</p><button class="btn btn-white" id="cycleNowBtn">Cycle Code Now</button>
+      </div>
+      <div class="panel contact-admin-panel">
+        <div class="page-head compact"><div><h2>Contact Details</h2><p>These contacts appear on the public Team Registration Portal.</p></div><button class="btn btn-primary" id="addContactBtn">+ Add Contact</button></div>
+        <div id="contactsAdminList" class="contacts-admin-list"></div>
+      </div>
+      <div class="panel" style="margin-top:20px;"><h2>Export everything</h2><p class="panel-hint">One workbook: all event results on one sheet, every registered team on another.</p><button class="btn btn-primary" id="exportAllBtn2">Export All (Results + Teams)</button></div>
+    </div>>
+  </div>
+</div>
+
+<!-- Schedule modal -->
+<div class="modal-backdrop hidden" id="scheduleModal">
+  <div class="modal">
+    <h2 id="scheduleModalTitle">Add Schedule</h2>
+    <form id="scheduleForm">
+      <input type="hidden" id="scheduleId">
+      <div class="field"><label>Event</label><select id="scheduleEvent"><option value="">General / All Events</option></select></div>
+      <div class="field"><label>Schedule Title</label><input type="text" id="scheduleTitle" required placeholder="e.g. Registration &amp; Technical Inspection"></div>
+      <div class="reg-grid">
+        <div class="field"><label>Date</label><input type="date" id="scheduleDate"></div>
+        <div class="field"><label>Time</label><input type="time" id="scheduleTime"></div>
+        <div class="field"><label>Venue</label><input type="text" id="scheduleVenue" placeholder="e.g. Main Arena"></div>
+        <div class="field"><label>Description</label><input type="text" id="scheduleDescription" placeholder="Optional details"></div>
+      </div>
+      <div class="modal-actions"><button type="button" class="btn" id="cancelSchedule">Cancel</button><button type="submit" class="btn btn-primary">Save Schedule</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Add event modal -->
+<div class="modal-backdrop hidden event-creator-backdrop" id="addEventModal">
+  <div class="modal modal-event-fullscreen">
+    <h2>Add New Event</h2>
+    <form id="addEventForm">
+      <div class="reg-grid">
+        <div class="field"><label>Event Name</label><input type="text" id="evName" required placeholder="e.g., Robo Race 2026"></div>
+        <div class="field"><label>Event Type</label><select id="evType"><option value="timed">Timed Competition</option><option value="score">Score-based</option><option value="info">Info Only</option></select></div>
+        <div class="field"><label>Registration Fee</label><div class="currency-input"><span class="currency-prefix">₹</span><input type="number" id="evFee" min="0" step="1" value="0" aria-label="Registration Fee in rupees"></div></div>
+        <div class="field"><label>Event Date / Range</label><input type="text" id="evDate" placeholder="14–16 October 2026"></div>
+        <div class="field"><label>Venue</label><input type="text" id="evVenue" placeholder="Main Robotics Arena"></div>
+        <div class="field"><label>Team Size</label><input type="text" id="evTeamSize" placeholder="2–4 members"></div>
+        <div class="field"><label>Prize / Reward</label><div class="currency-input"><span class="currency-prefix">₹</span><input type="text" id="evPrize" placeholder="25,000 or Trophy + ₹10,000" aria-label="Prize or reward"></div></div>
+        <div class="field"><label>Registration Deadline</label><input type="text" id="evDeadline" placeholder="05 October 2026"></div>
+        <div class="field"><label>College Payment Link</label><input type="url" id="evPaymentLink" placeholder="https://..." aria-label="College payment link"><small class="hint">Participants will use this link to make the registration payment.</small></div>
+      </div>
+      <div class="field"><label>Event Image</label><input type="file" id="evImage" accept="image/*"><small class="hint">JPG, PNG or WebP. Recommended under 2 MB.</small><div id="evImagePreview" class="image-preview"></div></div>
+      <div class="field"><label>Short Description</label><textarea id="evDesc" rows="3" placeholder="Shown only inside the event detail page."></textarea></div>
+      <div class="field rules-field"><div class="rules-heading-row"><div><label>Rules &amp; Guidelines</label><p class="hint">Select a section to edit it. The blue section is currently selected. Use × to remove a section, or + Add Section to create your own title.</p></div><button type="button" class="btn btn-sm" id="addRuleSection">＋ Add Section</button></div><div class="rules-workspace"><aside class="rules-sidebar"><div class="rules-sidebar-title">Sections</div><div class="rules-tabs" id="rulesTabs"></div></aside><section class="rules-editor-panel"><div class="active-rule-heading"><div><span class="active-rule-label">EDITING SECTION</span><h3 id="activeRuleTitle">General Guidelines</h3></div><span class="rule-status" id="ruleStatus">✓ Selected</span></div><div class="editor-shell"><div class="editor-toolbar" id="editorToolbar"><select data-cmd="formatBlock"><option value="p">Paragraph</option><option value="h2">Heading</option><option value="h3">Subheading</option><option value="pre">Code</option></select><select data-cmd="fontName"><option value="Inter">Inter</option><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Courier New">Courier New</option></select><select data-cmd="fontSize"><option value="3">12</option><option value="4">14</option><option value="5" selected>18</option><option value="6">24</option><option value="7">32</option></select><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>U</u></button><button type="button" data-cmd="insertUnorderedList">• List</button><button type="button" data-cmd="insertOrderedList">1. List</button><button type="button" data-cmd="justifyLeft">Left</button><button type="button" data-cmd="justifyCenter">Center</button><button type="button" data-cmd="justifyRight">Right</button><button type="button" id="insertRuleTable">▦ Table</button><button type="button" id="insertRuleLink">↗ Link</button><button type="button" id="clearRuleFormat">Clear</button></div><div id="ruleEditor" class="rich-editor" contenteditable="true" spellcheck="true" data-placeholder="Start writing the selected section..."></div></div></section></div></div>
+      <div class="field"><label>Assign users <span class="hint">(optional — leave none checked to allow any member)</span></label><div class="assign-users-list" id="assignUsersList"><p class="hint">Loading members…</p></div></div>
+      <div class="modal-actions"><button type="button" class="btn" id="cancelAddEvent">Cancel</button><button type="submit" class="btn btn-primary">Create Event</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Contact modal -->
+<div class="modal-backdrop hidden" id="contactModal"><div class="modal"><h2 id="contactModalTitle">Add Contact</h2><form id="contactForm"><input type="hidden" id="contactId"><div class="field"><label>Name</label><input id="contactName" required></div><div class="field"><label>Role</label><input id="contactRole" placeholder="Event Coordinator"></div><div class="field"><label>Phone</label><input id="contactPhone"></div><div class="field"><label>Email</label><input id="contactEmail" type="email"></div><div class="modal-actions"><button type="button" class="btn" id="cancelContact">Cancel</button><button type="submit" class="btn btn-primary">Save Contact</button></div></form></div></div>
+
+
+<script src="app.js"></script>
+</body>
+</html>
