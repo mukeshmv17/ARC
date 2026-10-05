@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Acharya's Robotic Club — Registration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<div class="loading-screen" id="siteLoader"><div class="loader-backdrop"></div><img src="assets/club-logo.jpeg" alt="Acharya Robotics Club"><div class="loader-ring"></div><div class="loader-caption">INITIALIZING ROBOTICS EXPERIENCE</div></div>
+<header class="nav">
+  <a class="brand" href="#about"><img class="brand-logo" src="assets/club-logo.jpeg" alt="Acharya's Robotic Club"><span>ACHARYA'S ROBOTIC CLUB</span></a>
+  <nav>
+    <a href="#about">About</a><a href="#events">Events</a><a href="#schedule">Schedule</a><a href="#faqs">FAQs</a><a href="#contact">Contact</a>
+  </nav>
+  <div class="nav-actions"><button class="btn ghost" id="loginBtn">Sign in</button><button class="btn primary" id="signupBtn">Sign up</button><div class="account-wrap hidden" id="accountWrap"><button class="btn primary account-btn" id="accountBtn">Account ▾</button><div class="account-menu hidden" id="accountMenu"><button id="enrolledBtn">Event Enrolled</button><button id="signoutBtn">Sign out</button></div></div></div>
+</header>
+
+<main>
+<section class="hero" id="about">
+  <div class="hero-copy">
+    <p class="eyebrow">ACHARYA INSTITUTE OF TECHNOLOGY · ACHARYA'S ROBOTIC CLUB</p>
+    <h1>Robo Habba 2026<br><span>Build. Compete.<br></span></h1>
+    <p class="lead">Acharya Robo Habba is a dynamic robotics extravaganza designed to ignite innovation, creativity and technical excellence through hands-on robotics competitions, showcases and engineering challenges.</p>
+    <div class="hero-actions"><a class="btn primary big" href="#events">Explore events</a><a class="text-link" href="#about-details">About Acharya →</a></div>
+  </div>
+  <div class="hero-card"><div class="grid-lines"></div><div class="hero-stat"><strong id="eventCount">—</strong><span>Live events</span></div><div class="hero-stat"><strong>2–4</strong><span>Typical team size</span></div><div class="hero-badge"><b>REGISTRATION</b><br><span id="registrationBanner" class="registration-banner open">OPEN</span></div></div>
+</section>
+
+<section class="section about-details" id="about-details">
+  <div class="section-head"><div><p class="eyebrow">ABOUT THE INSTITUTION</p><h2>Innovation through experience</h2></div></div>
+  <div class="about-grid">
+    <article class="about-card"><span class="about-index">01</span><h3>Acharya</h3><p>Acharya is a premier educational community based in Bangalore, known for innovation, excellence and holistic student development. With a legacy of more than three decades, Acharya offers a diverse learning environment that nurtures talent and future leaders.</p></article>
+    <article class="about-card"><span class="about-index">02</span><h3>Institute of Technology</h3><p>Acharya Institute of Technology (AIT), established in 2000 in Bengaluru, is an engineering and technology institution committed to teaching, research and professional development. It is affiliated with Visvesvaraya Technological University and accredited by NAAC and NBA.</p></article>
+    <article class="about-card"><span class="about-index">03</span><h3>Mechatronics Engineering</h3><p>Mechatronics engineering combines mechanical engineering, electronics, computer science and control engineering to prepare students for designing and implementing intelligent systems and products. The department's collaboration with Siemens supports exposure to current industry trends.</p></article>
+  </div>
+</section>
+
+<section class="section" id="events">
+  <div class="section-head"><div><p class="eyebrow">LEVEL · STAGE · SELECT</p><h2>Events</h2></div><div class="search"><span>⌕</span><input id="search" placeholder="Search events..."></div></div>
+  <div class="event-grid" id="eventsGrid"><div class="loading">Loading events…</div></div>
+</section>
+
+<section class="dark-section" id="schedule"><div class="section-inner"><p class="eyebrow">PLAN YOUR RUN</p><h2>Schedule</h2><p>Live schedule published by the Club coordinator. Check this section for reporting time, technical inspection, rounds and venue details.</p><div id="publicSchedule" class="public-schedule"><div class="schedule-card"><div><b>Loading schedule…</b><span>Connecting to Robotics Portal</span></div></div></div></div></section>
+
+<section class="section faq-section" id="faqs"><p class="eyebrow">NEED TO KNOW</p><h2>FAQs</h2><div class="faq-grid">
+<details open><summary>How do I register a team?</summary><p>Create or sign in to your Gmail account, select an event, enter the required team details and submit.</p></details>
+
+<!-- <details><summary>Where can I see my registration?</summary><p>Submitted teams are stored in the same database used by the Robotics Club Portal, so coordinators can see them from the event roster.</p></details> -->
+</div></section>
+
+<section class="contact" id="contact"><div><p class="eyebrow">CONTACT</p><h2>Acharya's Robotic Club</h2><p>For event rules, payment confirmation or registration corrections, contact the club coordinators.</p></div><div class="contact-list" id="publicContacts"><div class="contact-box"><b>Loading contact details…</b></div></div></section>
+</main>
+<footer class="portal-footer"><div class="footer-brand"><img src="assets/club-logo.jpeg" alt="Robotics Club"><div><b>ACHARYA'S ROBOTIC CLUB</b><span>BUILD · INNOVATE · INSPIRE</span></div></div><div class="footer-links"><a href="#about">About</a><a href="#events">Events</a><a href="#schedule">Schedule</a><a href="#faqs">FAQs</a><a href="#contact">Contact</a></div><div class="footer-social">
+  <a href="https://www.instagram.com/acharya_robotics_club?stkn=MXc2d2VhNmpoaThxNg==" target="_blank" rel="noopener" aria-label="Instagram" title="Instagram"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
+  <a href="https://acharya.ac.in" target="_blank" rel="noopener" aria-label="College website" title="College website"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg></a>
+  <a href="mailto:mukeshs.24.bemt@acharya.ac.in" aria-label="Email" title="Email"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="m3 7 9 6 9-6"/></svg></a>
+</div><div class="footer-status"><span class="status-dot"></span> Registration portal</div></footer>
+
+<div class="modal hidden" id="eventDetailModal"><div class="modal-card event-detail-card"><button class="close" data-close>×</button><div id="eventDetailContent"></div></div></div>
+
+<div class="modal hidden" id="authModal"><div class="modal-card"><button class="close" data-close>×</button><div class="modal-head"><p class="eyebrow">ACCOUNT</p><h2 id="authTitle">Create your account</h2><p id="authSubtitle">Use your college email to register and manage team entries.</p></div>
+<div class="auth-switch"><button class="active" id="authSignupTab">Sign up</button><button id="authLoginTab">Sign in</button></div>
+<div class="google-auth-block"><button type="button" class="google-btn" id="googleSignInBtn"><span class="google-icon">G</span><span>Continue with Google</span></button><div class="auth-divider"><span>or</span></div></div>
+<form id="signupForm"><label>Full name<input id="suName" required></label><label>College email<input id="suEmail" type="email" placeholder="name@college.edu.in" required></label><label>College<input id="suCollege" required></label><label>Phone number<input id="suPhone" required></label><label>Password<input id="suPassword" type="password" minlength="6" required></label><button class="btn primary full">Create account</button><p class="form-error" id="authError"></p></form>
+<form id="loginForm" class="hidden"><label>College email<input id="liEmail" type="email" placeholder="name@college.edu.in" required></label><label>Password<input id="liPassword" type="password" required></label><button class="btn primary full">Sign in</button><p class="form-error" id="loginError"></p></form>
+</div></div>
+
+<div class="modal hidden" id="registerModal"><div class="modal-card wide"><button class="close" data-close>×</button><div class="modal-head"><p class="eyebrow">TEAM REGISTRATION</p><h2 id="regTitle">Register</h2><p id="regFee"></p></div>
+<form id="teamForm"><div class="two"><label>Team name<input id="teamName" required placeholder="e.g. Robo Titans"></label></div>
+<div id="memberFields"></div><div class="member-actions"><button type="button" class="btn ghost" id="addMember">+ Add member</button><span>Up to 4 members</span></div>
+<div class="payment-proof" id="paymentProofBox">
+  <div class="payment-proof-head"><div><p class="eyebrow">PAYMENT</p><h3>Complete payment &amp; upload proof</h3><p id="paymentInstruction">Use the college-provided payment link below. After payment, upload the screenshot and enter the transaction ID.</p></div></div>
+  <a class="btn primary big payment-link-btn" id="makePaymentBtn" href="#" target="_blank" rel="noopener">Make Payment ↗</a>
+  <div class="payment-proof-grid">
+    <label>Transaction ID<input id="paymentTransactionId" placeholder="Enter payment / UTR transaction ID"></label>
+    <label>Payment Screenshot<input id="paymentScreenshot" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG, JPG or WebP · Max 3 MB</small></label>
+  </div>
+  <div class="payment-proof-status" id="paymentProofStatus"></div>
+</div>
+<button type="submit" class="btn primary full" disabled>Submit team registration</button><p class="form-error" id="teamError"></p><p class="success" id="teamSuccess"></p></form>
+</div></div>
+<div class="modal hidden" id="enrolledModal"><div class="modal-card wide"><button class="close" data-close>×</button><div class="modal-head"><p class="eyebrow">ACCOUNT</p><h2>Event Enrolled</h2><p>Teams registered with this account.</p></div><div id="enrolledList" class="enrolled-list"><div class="loading">Loading registrations…</div></div></div></div>
+<script src="app.js"></script>
+</body></html>
