@@ -1,3 +1,13 @@
+// ---------- Supabase Configuration ----------
+const SUPABASE_URL = "https://uuwosxozorvyosqrlwnf.supabase.co";
+
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Jum4cbT8SNPUDo_tJazpHA_7NSizZb1";
+
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
 const API = localStorage.getItem('ROBOTICS_API') || 'http://localhost:3000';
 let events=[], currentEvent=null, memberCount=2, currentUser=null, registrationOpen=true, contacts=[], paymentStarted=false;
 const $=id=>document.getElementById(id);
