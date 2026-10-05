@@ -38,19 +38,51 @@ function setLoginMode(mode) {
 
 adminLoginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+
   const email = document.getElementById('adminEmail').value.trim();
   const password = document.getElementById('adminPassword').value.trim();
   const err = document.getElementById('adminFormError');
+
+  err.classList.remove('show');
+
   try {
-    const res = await fetch('/api/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, role: 'admin' })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    currentUser = data;
+    // Sign in through Supabase Auth
+    const { data: authData, error: authError } =
+      await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      });
+
+    if (authError) {
+      throw new Error(authError.message);
+    }
+
+    // Get the corresponding profile from public.users
+    const { data: userData, error: userError } =
+      await supabaseClient
+        .from('users')
+        .select('*')
+        .eq('auth_id', authData.user.id)
+        .single();
+
+    if (userError || !userData) {
+      await supabaseClient.auth.signOut();
+      throw new Error('User profile not found.');
+    }
+
+    // Admin login only
+    if (userData.role !== 'admin') {
+      await supabaseClient.auth.signOut();
+      throw new Error('Access denied. This account is not an admin.');
+    }
+
+    currentUser = userData;
     enterApp();
-  } catch (ex) { err.textContent = ex.message; err.classList.add('show'); }
+
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.classList.add('show');
+  }
 });
 
 memberLoginForm.addEventListener('submit', async (e) => {
