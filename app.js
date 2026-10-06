@@ -453,44 +453,216 @@ document.getElementById('contactForm').onsubmit=async e=>{e.preventDefault();con
 
 // ---------- Schedule management ----------
 let scheduleRows = [];
+
 async function loadScheduleAdmin() {
   try {
-    const [scheduleRes, eventRes] = await Promise.all([fetch('/api/schedules'), fetch('/api/events')]);
-    scheduleRows = await scheduleRes.json();
-    const evs = await eventRes.json();
+    const { data: schedules, error: scheduleError } = await supabaseClient
+      .from('schedules')
+      .select('*')
+      .order('date', { ascending: true })
+      .order('time', { ascending: true });
+
+    if (scheduleError) {
+      throw scheduleError;
+    }
+
+    const { data: evs, error: eventError } = await supabaseClient
+      .from('events')
+      .select('id, name')
+      .order('created_at', { ascending: false });
+
+    if (eventError) {
+      throw eventError;
+    }
+
+    const eventMap = Object.fromEntries(
+      (evs || []).map(e => [Number(e.id), e.name])
+    );
+
+    scheduleRows = (schedules || []).map(r => ({
+      ...r,
+      eventId: r.event_id,
+      eventName: r.event_id ? (eventMap[Number(r.event_id)] || '') : ''
+    }));
+
     const sel = document.getElementById('scheduleEvent');
-    sel.innerHTML = '<option value="">General / All Events</option>' + evs.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+
+    sel.innerHTML =
+      '<option value="">General / All Events</option>' +
+      (evs || [])
+        .map(e => `<option value="${e.id}">${esc(e.name)}</option>`)
+        .join('');
+
     renderScheduleAdmin();
+
   } catch (e) {
-    document.getElementById('scheduleAdminList').innerHTML = `<p class="error show">Could not load schedule: ${esc(e.message)}</p>`;
+    console.error('Could not load schedule:', e);
+
+    document.getElementById('scheduleAdminList').innerHTML =
+      `<p class="error show">Could not load schedule: ${esc(e.message)}</p>`;
   }
 }
+
 function formatScheduleDate(v) {
   if (!v) return 'Date TBA';
+
   const d = new Date(v + 'T00:00:00');
-  return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString(undefined, {day:'2-digit', month:'short', year:'numeric'});
+
+  return Number.isNaN(d.getTime())
+    ? v
+    : d.toLocaleDateString(undefined, {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
 }
+
 function renderScheduleAdmin() {
   const wrap = document.getElementById('scheduleAdminList');
-  if (!scheduleRows.length) { wrap.innerHTML = '<div class="empty-state">No schedule entries yet. Add the first slot for your event.</div>'; return; }
+
+  if (!scheduleRows.length) {
+    wrap.innerHTML =
+      '<div class="empty-state">No schedule entries yet. Add the first slot for your event.</div>';
+    return;
+  }
+
   wrap.innerHTML = scheduleRows.map(r => `
     <div class="schedule-admin-row">
       <div class="schedule-admin-main">
-        <div class="schedule-date">${esc(formatScheduleDate(r.date))}${r.time ? ` · ${esc(r.time)}` : ''}</div>
+        <div class="schedule-date">
+          ${esc(formatScheduleDate(r.date))}
+          ${r.time ? ` · ${esc(r.time)}` : ''}
+        </div>
+
         <h3>${esc(r.title)}</h3>
-        <p>${r.eventName ? `<b>${esc(r.eventName)}</b> · ` : ''}${esc(r.venue || 'Venue TBA')}</p>
+
+        <p>
+          ${r.eventName ? `<b>${esc(r.eventName)}</b> · ` : ''}
+          ${esc(r.venue || 'Venue TBA')}
+        </p>
+
         ${r.description ? `<small>${esc(r.description)}</small>` : ''}
       </div>
-      <div class="schedule-admin-actions"><button class="btn btn-sm" onclick="editSchedule(${r.id})">Edit</button><button class="btn btn-sm btn-danger" onclick="deleteSchedule(${r.id})">Delete</button></div>
-    </div>`).join('');
-}
-const scheduleModal = document.getElementById('scheduleModal');
-document.getElementById('addScheduleBtn').addEventListener('click', () => { document.getElementById('scheduleModalTitle').textContent='Add Schedule'; document.getElementById('scheduleId').value=''; document.getElementById('scheduleForm').reset(); scheduleModal.classList.remove('hidden'); });
-document.getElementById('cancelSchedule').addEventListener('click', () => scheduleModal.classList.add('hidden'));
-window.editSchedule = (id) => { const r=scheduleRows.find(x=>x.id===id); if(!r)return; document.getElementById('scheduleModalTitle').textContent='Edit Schedule'; document.getElementById('scheduleId').value=r.id; document.getElementById('scheduleEvent').value=r.eventId || ''; document.getElementById('scheduleTitle').value=r.title||''; document.getElementById('scheduleDate').value=r.date||''; document.getElementById('scheduleTime').value=r.time||''; document.getElementById('scheduleVenue').value=r.venue||''; document.getElementById('scheduleDescription').value=r.description||''; scheduleModal.classList.remove('hidden'); };
-window.deleteSchedule = async (id) => { if(!confirm('Delete this schedule entry?')) return; const r=await fetch(`/api/schedules/${id}`,{method:'DELETE'}); if(r.ok) loadScheduleAdmin(); };
-document.getElementById('scheduleForm').addEventListener('submit', async (e) => { e.preventDefault(); const id=document.getElementById('scheduleId').value; const body={eventId:document.getElementById('scheduleEvent').value||null,title:document.getElementById('scheduleTitle').value.trim(),date:document.getElementById('scheduleDate').value,time:document.getElementById('scheduleTime').value,venue:document.getElementById('scheduleVenue').value.trim(),description:document.getElementById('scheduleDescription').value.trim()}; const r=await fetch(id?`/api/schedules/${id}`:'/api/schedules',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const d=await r.json(); if(!r.ok){alert(d.error||'Could not save schedule.');return;} scheduleModal.classList.add('hidden'); loadScheduleAdmin(); });
 
+      <div class="schedule-admin-actions">
+        <button class="btn btn-sm" onclick="editSchedule(${r.id})">
+          Edit
+        </button>
+
+        <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${r.id})">
+          Delete
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+const scheduleModal = document.getElementById('scheduleModal');
+
+document.getElementById('addScheduleBtn').addEventListener('click', () => {
+  document.getElementById('scheduleModalTitle').textContent = 'Add Schedule';
+  document.getElementById('scheduleId').value = '';
+  document.getElementById('scheduleForm').reset();
+  scheduleModal.classList.remove('hidden');
+});
+
+document.getElementById('cancelSchedule').addEventListener('click', () => {
+  scheduleModal.classList.add('hidden');
+});
+
+window.editSchedule = (id) => {
+  const r = scheduleRows.find(x => Number(x.id) === Number(id));
+
+  if (!r) return;
+
+  document.getElementById('scheduleModalTitle').textContent = 'Edit Schedule';
+  document.getElementById('scheduleId').value = r.id;
+  document.getElementById('scheduleEvent').value = r.eventId || '';
+  document.getElementById('scheduleTitle').value = r.title || '';
+  document.getElementById('scheduleDate').value = r.date || '';
+  document.getElementById('scheduleTime').value = r.time || '';
+  document.getElementById('scheduleVenue').value = r.venue || '';
+  document.getElementById('scheduleDescription').value = r.description || '';
+
+  scheduleModal.classList.remove('hidden');
+};
+
+window.deleteSchedule = async (id) => {
+  if (!confirm('Delete this schedule entry?')) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from('schedules')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    await loadScheduleAdmin();
+
+  } catch (e) {
+    console.error('Could not delete schedule:', e);
+    alert('Could not delete schedule: ' + e.message);
+  }
+};
+
+document.getElementById('scheduleForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  try {
+    const id = document.getElementById('scheduleId').value;
+
+    const body = {
+      event_id: document.getElementById('scheduleEvent').value
+        ? Number(document.getElementById('scheduleEvent').value)
+        : null,
+
+      title: document.getElementById('scheduleTitle').value.trim(),
+
+      date: document.getElementById('scheduleDate').value,
+
+      time: document.getElementById('scheduleTime').value,
+
+      venue: document.getElementById('scheduleVenue').value.trim(),
+
+      description: document.getElementById('scheduleDescription').value.trim()
+    };
+
+    let error;
+
+    if (id) {
+      const result = await supabaseClient
+        .from('schedules')
+        .update(body)
+        .eq('id', id);
+
+      error = result.error;
+
+    } else {
+      const result = await supabaseClient
+        .from('schedules')
+        .insert([body]);
+
+      error = result.error;
+    }
+
+    if (error) {
+      throw error;
+    }
+
+    alert(id ? 'Schedule updated successfully.' : 'Schedule added successfully.');
+
+    scheduleModal.classList.add('hidden');
+
+    await loadScheduleAdmin();
+
+  } catch (e) {
+    console.error('Could not save schedule:', e);
+    alert('Could not save schedule: ' + e.message);
+  }
+});
 // ---------- General Register page ----------
 function populateRegisterEventOptions() {
   const sel = document.getElementById('rEvent');
