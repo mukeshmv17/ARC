@@ -2345,23 +2345,4 @@ async function deleteUser(id) {
   }
 }
 
-// ---------- Settings: cycle code ----------
-async function loadCycleCode() {
-  const res = await fetch('/api/settings/cycle-code');
-  const data = await res.json();
-  document.getElementById('cycleCodeDisplay').textContent = (data.code || '------').split('').join(' ');
-}
-document.getElementById('cycleNowBtn').addEventListener('click', async () => {
-  const res = await fetch('/api/settings/cycle-code/cycle', { method: 'POST' });
-  const data = await res.json();
-  document.getElementById('cycleCodeDisplay').textContent = data.code.split('').join(' ');
-});
 
-setInterval(() => {
-  const registerPage = document.getElementById('pageRegister');
-  const usersPage = document.getElementById('pageUsers');
-  if (registerPage && !registerPage.classList.contains('hidden')) loadRegisterTeamsList();
-  if (usersPage && !usersPage.classList.contains('hidden')) loadUsersList();
-}, 5000);
-
-setTimeout(()=>document.getElementById('portalLoader')?.classList.add('hidden'),700);
