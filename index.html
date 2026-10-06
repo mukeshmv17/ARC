@@ -339,6 +339,39 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js?v=20261006-fix-loader-settings"></script>
-<script>setTimeout(function(){var l=document.getElementById("portalLoader");if(l)l.classList.add("hidden");},1200);</script>
+<script>
+(function(){
+  function initPortalUI(){
+    var loader=document.getElementById("portalLoader");
+    if(loader){
+      loader.classList.add("hidden");
+      loader.style.display="none";
+    }
+    var user=document.getElementById("tabUser");
+    var admin=document.getElementById("tabAdmin");
+    var userForm=document.getElementById("memberLoginForm");
+    var adminForm=document.getElementById("adminLoginForm");
+    var notice=document.getElementById("adminNotice");
+    if(user && admin && userForm && adminForm){
+      admin.onclick=function(){
+        user.classList.remove("active");
+        admin.classList.add("active");
+        userForm.classList.add("hidden");
+        adminForm.classList.remove("hidden");
+        if(notice) notice.style.display="block";
+      };
+      user.onclick=function(){
+        admin.classList.remove("active");
+        user.classList.add("active");
+        adminForm.classList.add("hidden");
+        userForm.classList.remove("hidden");
+        if(notice) notice.style.display="none";
+      };
+    }
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",initPortalUI);
+  else initPortalUI();
+})();
+</script>
 </body>
 </html>
