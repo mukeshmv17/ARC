@@ -785,10 +785,15 @@ async function loadRegisterTeamsList() {
                   ${esc(t.transactionId || 'Not provided')}
                 </strong>
               </div>
-
               <div>
                 <label>PAYMENT PROOF</label>
                 <div>${proof}</div>
+              </div>
+              <div>
+                <label>ACTIONS</label>
+                <div>
+                  <button type="button" class="btn btn-sm btn-danger" onclick="deleteRegisteredTeam(${Number(t.id)})">Remove Team</button>
+                </div>
               </div>
 
             </div>
@@ -1153,7 +1158,16 @@ async function loadUsersList() {
           <div class="payment-verification-card">
             <div><label>PAYMENT STATUS</label><strong>${esc(paid)}</strong></div>
             <div><label>TRANSACTION ID</label><strong class="transaction-value">${tx}</strong></div>
-            <div><label>PAYMENT PROOF</label><div>${proof}</div></div>
+              <div>
+                <label>PAYMENT PROOF</label>
+                <div>${proof}</div>
+              </div>
+              <div>
+                <label>ACTIONS</label>
+                <div>
+                  <button type="button" class="btn btn-sm btn-danger" onclick="deleteRegisteredTeam(${Number(t.id)})">Remove Team</button>
+                </div>
+              </div>
           </div>
         </div>
       </div>`;
@@ -1165,35 +1179,80 @@ async function loadUsersList() {
   }
 }
 
+async function deleteRegisteredTeam(teamId) {
+  if (!confirm('Remove this registered team? This will permanently delete the registration.')) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from('participants')
+      .delete()
+      .eq('id', teamId);
+
+    if (error) throw error;
+
+    alert('Registered team removed successfully.');
+    await loadRegisterTeamsList();
+
+    const usersPage = document.getElementById('pageUsers');
+    if (usersPage && !usersPage.classList.contains('hidden')) {
+      await loadUsersList();
+    }
+  } catch (e) {
+    console.error('Could not remove registered team:', e);
+    alert('Could not remove registered team: ' + e.message);
+  }
+}
+
 async function viewPaymentProof(teamId) {
   try {
-    const res = await fetch('/api/registered-teams');
-    const teams = await res.json();
-    const team = teams.find(t => Number(t.id) === Number(teamId));
-    if (!team || !(team.paymentScreenshotUrl || team.paymentScreenshot)) return alert('Payment screenshot is not available for this registration.');
-    const members = Array.isArray(team.members) ? team.members : [];
+    const { data: team, error: teamError } = await supabaseClient
+      .from('participants')
+      .select('*')
+      .eq('id', teamId)
+      .single();
+
+    if (teamError || !team) throw teamError || new Error('Registration not found.');
+
+    const { data: event, error: eventError } = await supabaseClient
+      .from('events')
+      .select('name')
+      .eq('id', team.event_id)
+      .maybeSingle();
+
+    if (eventError) throw eventError;
+
+    const screenshot = team.payment_screenshot_path || team.payment_screenshot;
+    if (!screenshot) return alert('Payment screenshot is not available for this registration.');
+
+    const members = Array.isArray(team.members_json)
+      ? team.members_json
+      : (team.members_json ? JSON.parse(team.members_json) : []);
+
     const memberText = members.map(m => m.name || 'Unnamed member').join(', ');
+
     const overlay = document.createElement('div');
     overlay.className = 'payment-proof-overlay';
     overlay.innerHTML = `
       <div class="payment-proof-modal">
         <button class="payment-proof-close" type="button" aria-label="Close">×</button>
         <p class="eyebrow">PAYMENT VERIFICATION</p>
-        <h2>${esc(team.teamName || 'Registered Team')}</h2>
-        <p class="payment-proof-meta">${esc(team.eventName || 'Event')} · ${esc(team.college || 'College not provided')}</p>
+        <h2>${esc(team.name || 'Registered Team')}</h2>
+        <p class="payment-proof-meta">${esc(event?.name || 'Event')} · ${esc(team.college || 'College not provided')}</p>
         <div class="payment-proof-details">
-          <div><span>Transaction ID</span><b>${esc(team.transactionId || 'Not provided')}</b></div>
-          <div><span>Amount</span><b>₹${Number(team.amountPaid || 0).toFixed(0)}</b></div>
+          <div><span>Transaction ID</span><b>${esc(team.transaction_id || 'Not provided')}</b></div>
+          <div><span>Amount</span><b>₹${Number(team.amount_paid || 0).toFixed(0)}</b></div>
           <div><span>Members</span><b>${esc(memberText || 'No member details')}</b></div>
         </div>
-        <div class="payment-proof-image-wrap"><img src="${team.paymentScreenshotUrl || team.paymentScreenshot}" alt="Payment screenshot"></div>
+        <div class="payment-proof-image-wrap"><img src="${screenshot}" alt="Payment screenshot"></div>
       </div>`;
     document.body.appendChild(overlay);
+
     const close = () => overlay.remove();
     overlay.querySelector('.payment-proof-close').onclick = close;
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   } catch (e) {
-    alert('Could not load the payment proof.');
+    console.error('Could not load the payment proof:', e);
+    alert('Could not load the payment proof: ' + e.message);
   }
 }
 
