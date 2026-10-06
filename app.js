@@ -679,32 +679,136 @@ function populateRegisterEventOptions() {
 async function loadRegisterTeamsList() {
   const wrap = document.getElementById('registerTeamsList');
   const count = document.getElementById('registerTeamCount');
+
   if (!wrap) return;
+
   try {
-    const res = await fetch('/api/registered-teams?ts=' + Date.now(), { cache: 'no-store' });
-    const teams = await res.json();
-    if (!res.ok) throw new Error(teams.error || 'Could not load registrations.');
+    const { data: registrations, error: registrationError } =
+      await supabaseClient
+        .from('participants')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (registrationError) {
+      throw registrationError;
+    }
+
+    const { data: events, error: eventError } =
+      await supabaseClient
+        .from('events')
+        .select('id, name');
+
+    if (eventError) {
+      throw eventError;
+    }
+
+    const eventMap = Object.fromEntries(
+      (events || []).map(e => [Number(e.id), e.name])
+    );
+
+    const teams = (registrations || []).map(t => ({
+      ...t,
+      eventName: eventMap[Number(t.event_id)] || 'Event',
+      teamName: t.name,
+      members: Array.isArray(t.members_json)
+        ? t.members_json
+        : (t.members_json ? JSON.parse(t.members_json) : []),
+      teamType: t.team_type,
+      paymentStatus: t.payment_status,
+      amountPaid: t.amount_paid,
+      transactionId: t.transaction_id,
+      paymentScreenshot: t.payment_screenshot,
+      paymentScreenshotUrl: t.payment_screenshot_path
+    }));
+
     count.textContent = teams.length;
+
     wrap.innerHTML = teams.map(t => {
+
       const members = Array.isArray(t.members) ? t.members : [];
-      const paid = Number(t.amountPaid || 0) > 0 ? `₹${Number(t.amountPaid).toFixed(0)}` : (t.paymentStatus === 'submitted_for_verification' ? 'Proof submitted' : (t.paymentStatus === 'paid' ? 'Paid' : 'Not required'));
-      const proof = (t.paymentScreenshotUrl || t.paymentScreenshot) ? `<button type="button" class="btn btn-sm btn-primary" onclick="viewPaymentProof(${Number(t.id)})">View Payment Proof</button>` : '<span class="payment-missing">No screenshot</span>';
-      return `<div class="admin-row team-row-enhanced registered-team-card">
-        <div class="registered-team-main">
-          <div class="registered-team-title"><b>${esc(t.teamName || 'Unnamed team')}</b><span class="team-id-badge">#${esc(t.id)}</span></div>
-          <span>${esc(t.eventName || 'Event')} · ${esc(t.college || 'College not provided')} · ${t.teamType === 'external' ? 'External' : 'Internal'}</span>
-          <small>${esc(members.map((m,i) => `${i+1}. ${m.name || 'Unnamed'}${m.email ? ' · ' + m.email : ''}${m.phone ? ' · ' + m.phone : ''}`).join(' | ') || 'No member details')}</small>
-          <div class="payment-verification-card">
-            <div><label>PAYMENT STATUS</label><strong>${esc(paid)}</strong></div>
-            <div><label>TRANSACTION ID</label><strong class="transaction-value">${esc(t.transactionId || 'Not provided')}</strong></div>
-            <div><label>PAYMENT PROOF</label><div>${proof}</div></div>
+
+      const paid =
+        Number(t.amountPaid || 0) > 0
+          ? `₹${Number(t.amountPaid).toFixed(0)}`
+          : (
+              t.paymentStatus === 'submitted_for_verification'
+                ? 'Proof submitted'
+                : (
+                    t.paymentStatus === 'paid'
+                      ? 'Paid'
+                      : 'Not required'
+                  )
+            );
+
+      const proof =
+        (t.paymentScreenshotUrl || t.paymentScreenshot)
+          ? `<button type="button"
+                class="btn btn-sm btn-primary"
+                onclick="viewPaymentProof(${Number(t.id)})">
+                View Payment Proof
+             </button>`
+          : '<span class="payment-missing">No screenshot</span>';
+
+      return `
+        <div class="admin-row team-row-enhanced registered-team-card">
+          <div class="registered-team-main">
+
+            <div class="registered-team-title">
+              <b>${esc(t.teamName || 'Unnamed team')}</b>
+              <span class="team-id-badge">#${esc(t.id)}</span>
+            </div>
+
+            <span>
+              ${esc(t.eventName || 'Event')} ·
+              ${esc(t.college || 'College not provided')} ·
+              ${t.teamType === 'external' ? 'External' : 'Internal'}
+            </span>
+
+            <small>
+              ${esc(
+                members.map((m, i) =>
+                  `${i + 1}. ${m.name || 'Unnamed'}${m.email ? ' · ' + m.email : ''}${m.phone ? ' · ' + m.phone : ''}`
+                ).join(' | ') || 'No member details'
+              )}
+            </small>
+
+            <div class="payment-verification-card">
+
+              <div>
+                <label>PAYMENT STATUS</label>
+                <strong>${esc(paid)}</strong>
+              </div>
+
+              <div>
+                <label>TRANSACTION ID</label>
+                <strong class="transaction-value">
+                  ${esc(t.transactionId || 'Not provided')}
+                </strong>
+              </div>
+
+              <div>
+                <label>PAYMENT PROOF</label>
+                <div>${proof}</div>
+              </div>
+
+            </div>
+
           </div>
         </div>
-      </div>`;
-    }).join('') || '<p class="empty-users">No teams have registered through the public portal yet.</p>';
+      `;
+    }).join('') ||
+      '<p class="empty-users">No teams have registered through the public portal yet.</p>';
+
   } catch (e) {
+
+    console.error('Could not load registered teams:', e);
+
     count.textContent = '0';
-    wrap.innerHTML = `<p class="empty-users">Could not load registered teams: ${esc(e.message)}</p>`;
+
+    wrap.innerHTML =
+      `<p class="empty-users">
+        Could not load registered teams: ${esc(e.message)}
+      </p>`;
   }
 }
 
@@ -778,12 +882,24 @@ document.getElementById('regForm').addEventListener('submit', async (e) => {
   }
 
   const teamType = document.getElementById('rTeamType').value;
-  const res = await fetch(`/api/events/${eventId}/participants`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: teamName, college, members, cls: autoClass, teamType })
-  });
-  const data = await res.json();
-  if (!res.ok) { err.textContent = data.error || 'Could not register team.'; err.classList.add('show'); return; }
+  const { error: registrationError } = await supabaseClient
+  .from('participants')
+  .insert([{
+    event_id: Number(eventId),
+    name: teamName,
+    college: college,
+    members_json: members,
+    cls: autoClass,
+    team_type: teamType
+  }]);
+
+if (registrationError) {
+  console.error('Team registration error:', registrationError);
+  err.textContent =
+    registrationError.message || 'Could not register team.';
+  err.classList.add('show');
+  return;
+}
 
   ok.classList.remove('hidden');
   document.getElementById('rTeamName').value = '';
