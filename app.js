@@ -62,7 +62,7 @@ adminLoginForm.addEventListener('submit', async (e) => {
       await supabaseClient
         .from('users')
         .select('*')
-        .eq('auth_user_id', authData.user.id)
+        .eq('auth_id', authData.user.id)
         .single();
 
     if (userError || !userData) {
