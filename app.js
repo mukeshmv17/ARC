@@ -1305,6 +1305,1047 @@ async function deleteUser(id) {
 }
 
 // ---------- Settings: cycle code ----------
+async function getSetting(key, fallback = null) {
+  const { data, error } = await supabaseClient
+    .from('settings')
+    .select('*')
+    .eq('key', key)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return fallback;
+
+  const raw = data.value;
+  if (raw === null || raw === undefined) return fallback;
+
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch (_) { return raw; }
+  }
+  return raw;
+}
+
+async function setSetting(key, value) {
+  const payload = {
+    key,
+    value: typeof value === 'string' ? value : JSON.stringify(value)
+  };
+
+  const { error } = await supabaseClient
+    .from('settings')
+    .upsert(payload, { onConflict: 'key' });
+
+  if (error) throw error;
+}
+
+async function loadCycleCode() {
+  try {
+    const code = await getSetting('cycle_code', '------');
+    document.getElementById('cycleCodeDisplay').textContent = String(code || '------').split('').join(' ');
+  } catch (e) {
+    console.error('Could not load student registration code:', e);
+    document.getElementById('cycleCodeDisplay').textContent = '------';
+  }
+}
+
+document.getElementById('cycleNowBtn').addEventListener('click', async () => {
+  try {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    await setSetting('cycle_code', code);
+    document.getElementById('cycleCodeDisplay').textContent = code.split('').join(' ');
+    alert('Student registration code updated.');
+  } catch (e) {
+    console.error('Could not update student registration code:', e);
+    alert('Could not update the registration code: ' + e.message);
+  }
+});
+
+// ---------- Registration control ----------
+async function loadRegistrationControl() {
+  try {
+    const open = await getSetting('registration_open', true);
+    const toggle = document.getElementById('registrationOpenToggle');
+    if (!toggle) return;
+    toggle.checked = open === true || open === 'true';
+    document.getElementById('registrationOpenLabel').textContent = toggle.checked ? 'OPEN' : 'CLOSED';
+  } catch (e) {
+    console.error('Could not load registration status:', e);
+  }
+}
+
+document.getElementById('registrationOpenToggle').addEventListener('change', async e => {
+  const open = e.target.checked;
+  try {
+    await setSetting('registration_open', open);
+    document.getElementById('registrationOpenLabel').textContent = open ? 'OPEN' : 'CLOSED';
+  } catch (err) {
+    console.error('Could not update registration status:', err);
+    e.target.checked = !open;
+    alert('Could not update registration status: ' + err.message);
+  }
+});
+
+// ---------- Contacts ----------
+async function loadContacts() {
+  const wrap = document.getElementById('contactsAdminList');
+  if (!wrap) return;
+
+  try {
+    const { data: rows, error } = await supabaseClient
+      .from('contacts')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) throw error;
+
+    wrap.innerHTML = (rows || []).map(c => `
+      <div class="contact-admin-row">
+        <div>
+          <b>${esc(c.name || '')}</b>
+          <span>${esc(c.role || '')}</span>
+          <small>${esc(c.phone || '')} · ${esc(c.email || '')}</small>
+        </div>
+        <div>
+          <button class="btn btn-sm" onclick="editContact(${c.id})">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteContact(${c.id})">Delete</button>
+        </div>
+      </div>`
+    ).join('') || '<p class="panel-hint">No contacts yet.</p>';
+
+    window.contactRows = rows || [];
+  } catch (e) {
+    console.error('Could not load contacts:', e);
+    wrap.innerHTML = `<p class="error show">Could not load contacts: ${esc(e.message)}</p>`;
+  }
+}
+
+document.getElementById('addContactBtn').onclick = () => {
+  document.getElementById('contactModalTitle').textContent = 'Add Contact';
+  document.getElementById('contactForm').reset();
+  document.getElementById('contactId').value = '';
+  document.getElementById('contactModal').classList.remove('hidden');
+};
+
+document.getElementById('cancelContact').onclick = () =>
+  document.getElementById('contactModal').classList.add('hidden');
+
+window.editContact = id => {
+  const c = (window.contactRows || []).find(x => x.id === id);
+  if (!c) return;
+
+  document.getElementById('contactModalTitle').textContent = 'Edit Contact';
+  document.getElementById('contactId').value = c.id;
+  document.getElementById('contactName').value = c.name || '';
+  document.getElementById('contactRole').value = c.role || '';
+  document.getElementById('contactPhone').value = c.phone || '';
+  document.getElementById('contactEmail').value = c.email || '';
+  document.getElementById('contactModal').classList.remove('hidden');
+};
+
+window.deleteContact = async id => {
+  if (!confirm('Delete this contact?')) return;
+
+  const { error } = await supabaseClient
+    .from('contacts')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    alert('Could not delete contact: ' + error.message);
+    return;
+  }
+
+  await loadContacts();
+};
+
+document.getElementById('contactForm').onsubmit = async e => {
+  e.preventDefault();
+
+  const id = document.getElementById('contactId').value;
+  const body = {
+    name: document.getElementById('contactName').value.trim(),
+    role: document.getElementById('contactRole').value.trim(),
+    phone: document.getElementById('contactPhone').value.trim(),
+    email: document.getElementById('contactEmail').value.trim()
+  };
+
+  try {
+    let error;
+
+    if (id) {
+      ({ error } = await supabaseClient
+        .from('contacts')
+        .update(body)
+        .eq('id', id));
+    } else {
+      ({ error } = await supabaseClient
+        .from('contacts')
+        .insert([body]));
+    }
+
+    if (error) throw error;
+
+    document.getElementById('contactModal').classList.add('hidden');
+    await loadContacts();
+  } catch (err) {
+    console.error('Could not save contact:', err);
+    alert('Could not save contact: ' + err.message);
+  }
+};
+
+// ---------- Schedule management ----------
+let scheduleRows = [];
+
+async function loadScheduleAdmin() {
+  try {
+    const { data: schedules, error: scheduleError } = await supabaseClient
+      .from('schedules')
+      .select('*')
+      .order('date', { ascending: true })
+      .order('time', { ascending: true });
+
+    if (scheduleError) {
+      throw scheduleError;
+    }
+
+    const { data: evs, error: eventError } = await supabaseClient
+      .from('events')
+      .select('id, name')
+      .order('created_at', { ascending: false });
+
+    if (eventError) {
+      throw eventError;
+    }
+
+    const eventMap = Object.fromEntries(
+      (evs || []).map(e => [Number(e.id), e.name])
+    );
+
+    scheduleRows = (schedules || []).map(r => ({
+      ...r,
+      eventId: r.event_id,
+      eventName: r.event_id ? (eventMap[Number(r.event_id)] || '') : ''
+    }));
+
+    const sel = document.getElementById('scheduleEvent');
+
+    sel.innerHTML =
+      '<option value="">General / All Events</option>' +
+      (evs || [])
+        .map(e => `<option value="${e.id}">${esc(e.name)}</option>`)
+        .join('');
+
+    renderScheduleAdmin();
+
+  } catch (e) {
+    console.error('Could not load schedule:', e);
+
+    document.getElementById('scheduleAdminList').innerHTML =
+      `<p class="error show">Could not load schedule: ${esc(e.message)}</p>`;
+  }
+}
+
+function formatScheduleDate(v) {
+  if (!v) return 'Date TBA';
+
+  const d = new Date(v + 'T00:00:00');
+
+  return Number.isNaN(d.getTime())
+    ? v
+    : d.toLocaleDateString(undefined, {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+}
+
+function renderScheduleAdmin() {
+  const wrap = document.getElementById('scheduleAdminList');
+
+  if (!scheduleRows.length) {
+    wrap.innerHTML =
+      '<div class="empty-state">No schedule entries yet. Add the first slot for your event.</div>';
+    return;
+  }
+
+  wrap.innerHTML = scheduleRows.map(r => `
+    <div class="schedule-admin-row">
+      <div class="schedule-admin-main">
+        <div class="schedule-date">
+          ${esc(formatScheduleDate(r.date))}
+          ${r.time ? ` · ${esc(r.time)}` : ''}
+        </div>
+
+        <h3>${esc(r.title)}</h3>
+
+        <p>
+          ${r.eventName ? `<b>${esc(r.eventName)}</b> · ` : ''}
+          ${esc(r.venue || 'Venue TBA')}
+        </p>
+
+        ${r.description ? `<small>${esc(r.description)}</small>` : ''}
+      </div>
+
+      <div class="schedule-admin-actions">
+        <button class="btn btn-sm" onclick="editSchedule(${r.id})">
+          Edit
+        </button>
+
+        <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${r.id})">
+          Delete
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+const scheduleModal = document.getElementById('scheduleModal');
+
+document.getElementById('addScheduleBtn').addEventListener('click', () => {
+  document.getElementById('scheduleModalTitle').textContent = 'Add Schedule';
+  document.getElementById('scheduleId').value = '';
+  document.getElementById('scheduleForm').reset();
+  scheduleModal.classList.remove('hidden');
+});
+
+document.getElementById('cancelSchedule').addEventListener('click', () => {
+  scheduleModal.classList.add('hidden');
+});
+
+window.editSchedule = (id) => {
+  const r = scheduleRows.find(x => Number(x.id) === Number(id));
+
+  if (!r) return;
+
+  document.getElementById('scheduleModalTitle').textContent = 'Edit Schedule';
+  document.getElementById('scheduleId').value = r.id;
+  document.getElementById('scheduleEvent').value = r.eventId || '';
+  document.getElementById('scheduleTitle').value = r.title || '';
+  document.getElementById('scheduleDate').value = r.date || '';
+  document.getElementById('scheduleTime').value = r.time || '';
+  document.getElementById('scheduleVenue').value = r.venue || '';
+  document.getElementById('scheduleDescription').value = r.description || '';
+
+  scheduleModal.classList.remove('hidden');
+};
+
+window.deleteSchedule = async (id) => {
+  if (!confirm('Delete this schedule entry?')) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from('schedules')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    await loadScheduleAdmin();
+
+  } catch (e) {
+    console.error('Could not delete schedule:', e);
+    alert('Could not delete schedule: ' + e.message);
+  }
+};
+
+document.getElementById('scheduleForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  try {
+    const id = document.getElementById('scheduleId').value;
+
+    const body = {
+      event_id: document.getElementById('scheduleEvent').value
+        ? Number(document.getElementById('scheduleEvent').value)
+        : null,
+
+      title: document.getElementById('scheduleTitle').value.trim(),
+
+      date: document.getElementById('scheduleDate').value,
+
+      time: document.getElementById('scheduleTime').value,
+
+      venue: document.getElementById('scheduleVenue').value.trim(),
+
+      description: document.getElementById('scheduleDescription').value.trim()
+    };
+
+    let error;
+
+    if (id) {
+      const result = await supabaseClient
+        .from('schedules')
+        .update(body)
+        .eq('id', id);
+
+      error = result.error;
+
+    } else {
+      const result = await supabaseClient
+        .from('schedules')
+        .insert([body]);
+
+      error = result.error;
+    }
+
+    if (error) {
+      throw error;
+    }
+
+    alert(id ? 'Schedule updated successfully.' : 'Schedule added successfully.');
+
+    scheduleModal.classList.add('hidden');
+
+    await loadScheduleAdmin();
+
+  } catch (e) {
+    console.error('Could not save schedule:', e);
+    alert('Could not save schedule: ' + e.message);
+  }
+});
+// ---------- General Register page ----------
+function populateRegisterEventOptions() {
+  const sel = document.getElementById('rEvent');
+  const open = currentEvents.filter(e => {
+    if (e.type !== 'timed' && e.type !== 'score') return false;
+    if (!e.assignedUserIds || !e.assignedUserIds.length) return true;
+    return currentUser.role === 'admin' || e.assignedUserIds.includes(currentUser.id);
+  });
+  sel.innerHTML = open.length
+    ? open.map(e => `<option value="${e.id}">${esc(e.name)}${e.type === 'score' ? ' (Score)' : ''}</option>`).join('')
+    : '<option value="" disabled selected>No events open to you right now</option>';
+}
+
+async function loadRegisterTeamsList() {
+  const wrap = document.getElementById('registerTeamsList');
+  const count = document.getElementById('registerTeamCount');
+
+  if (!wrap) return;
+
+  try {
+    const { data: registrations, error: registrationError } =
+      await supabaseClient
+        .from('participants')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (registrationError) {
+      throw registrationError;
+    }
+
+    const { data: events, error: eventError } =
+      await supabaseClient
+        .from('events')
+        .select('id, name');
+
+    if (eventError) {
+      throw eventError;
+    }
+
+    const eventMap = Object.fromEntries(
+      (events || []).map(e => [Number(e.id), e.name])
+    );
+
+    const teams = (registrations || []).map(t => ({
+      ...t,
+      eventName: eventMap[Number(t.event_id)] || 'Event',
+      teamName: t.name,
+      members: Array.isArray(t.members_json)
+        ? t.members_json
+        : (t.members_json ? JSON.parse(t.members_json) : []),
+      teamType: t.team_type,
+      paymentStatus: t.payment_status,
+      amountPaid: t.amount_paid,
+      transactionId: t.transaction_id,
+      paymentScreenshot: t.payment_screenshot,
+      paymentScreenshotUrl: t.payment_screenshot_path
+    }));
+
+    count.textContent = teams.length;
+
+    wrap.innerHTML = teams.map(t => {
+
+      const members = Array.isArray(t.members) ? t.members : [];
+
+      const paid =
+        Number(t.amountPaid || 0) > 0
+          ? `₹${Number(t.amountPaid).toFixed(0)}`
+          : (
+              t.paymentStatus === 'submitted_for_verification'
+                ? 'Proof submitted'
+                : (
+                    t.paymentStatus === 'paid'
+                      ? 'Paid'
+                      : 'Not required'
+                  )
+            );
+
+      const proof =
+        (t.paymentScreenshotUrl || t.paymentScreenshot)
+          ? `<button type="button"
+                class="btn btn-sm btn-primary"
+                onclick="viewPaymentProof(${Number(t.id)})">
+                View Payment Proof
+             </button>`
+          : '<span class="payment-missing">No screenshot</span>';
+
+      return `
+        <div class="admin-row team-row-enhanced registered-team-card">
+          <div class="registered-team-main">
+
+            <div class="registered-team-title">
+              <b>${esc(t.teamName || 'Unnamed team')}</b>
+              <span class="team-id-badge">#${esc(t.id)}</span>
+            </div>
+
+            <span>
+              ${esc(t.eventName || 'Event')} ·
+              ${esc(t.college || 'College not provided')} ·
+              ${t.teamType === 'external' ? 'External' : 'Internal'}
+            </span>
+
+            <small>
+              ${esc(
+                members.map((m, i) =>
+                  `${i + 1}. ${m.name || 'Unnamed'}${m.email ? ' · ' + m.email : ''}${m.phone ? ' · ' + m.phone : ''}`
+                ).join(' | ') || 'No member details'
+              )}
+            </small>
+
+            <div class="payment-verification-card">
+
+              <div>
+                <label>PAYMENT STATUS</label>
+                <strong>${esc(paid)}</strong>
+              </div>
+
+              <div>
+                <label>TRANSACTION ID</label>
+                <strong class="transaction-value">
+                  ${esc(t.transactionId || 'Not provided')}
+                </strong>
+              </div>
+              <div>
+                <label>PAYMENT PROOF</label>
+                <div>${proof}</div>
+              </div>
+              <div>
+                <label>ACTIONS</label>
+                <div>
+                  <button type="button" class="btn btn-sm btn-danger" onclick="deleteRegisteredTeam(${Number(t.id)})">Remove Team</button>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      `;
+    }).join('') ||
+      '<p class="empty-users">No teams have registered through the public portal yet.</p>';
+
+  } catch (e) {
+
+    console.error('Could not load registered teams:', e);
+
+    count.textContent = '0';
+
+    wrap.innerHTML =
+      `<p class="empty-users">
+        Could not load registered teams: ${esc(e.message)}
+      </p>`;
+  }
+}
+
+function memberRowHtml(i) {
+  return `
+    <div class="member-block" data-idx="${i}">
+      <h4>Member ${i + 1}${i < 2 ? '' : ' (optional)'}</h4>
+      <div class="reg-grid">
+        <div class="field"><label>Name</label><input type="text" class="mName" ${i < 2 ? 'required' : ''}></div>
+        <div class="field"><label>Department</label><input type="text" class="mDept" ${i < 2 ? 'required' : ''}></div>
+        <div class="field"><label>Year / Sem</label>
+          <select class="mYear" ${i < 2 ? 'required' : ''}>
+            <option value="" disabled selected>Select…</option>
+            <option>1st Year / Sem 1</option><option>1st Year / Sem 2</option>
+            <option>2nd Year / Sem 3</option><option>2nd Year / Sem 4</option>
+            <option>3rd Year / Sem 5</option><option>3rd Year / Sem 6</option>
+            <option>4th Year / Sem 7</option><option>4th Year / Sem 8</option>
+          </select>
+        </div>
+        <div class="field"><label>Contact number</label><input type="tel" class="mContact" ${i < 2 ? 'required' : ''}></div>
+      </div>
+    </div>`;
+}
+
+function buildMemberRows(count) {
+  memberRowCount = Math.max(2, Math.min(4, count));
+  const wrap = document.getElementById('membersWrap');
+  wrap.innerHTML = '';
+  for (let i = 0; i < memberRowCount; i++) wrap.insertAdjacentHTML('beforeend', memberRowHtml(i));
+  document.getElementById('addMemberBtn').disabled = memberRowCount >= 4;
+  document.getElementById('removeMemberBtn').disabled = memberRowCount <= 2;
+}
+document.getElementById('addMemberBtn').addEventListener('click', () => buildMemberRows(memberRowCount + 1));
+document.getElementById('removeMemberBtn').addEventListener('click', () => buildMemberRows(memberRowCount - 1));
+
+document.querySelectorAll('.team-type-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.team-type-opt').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('rTeamType').value = btn.dataset.type;
+  });
+});
+
+document.getElementById('regForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('regFormError');
+  const ok = document.getElementById('regFormSuccess');
+  err.classList.remove('show'); ok.classList.add('hidden');
+
+  const eventId = document.getElementById('rEvent').value;
+  const teamName = document.getElementById('rTeamName').value.trim();
+  const college = document.getElementById('rCollege').value.trim();
+  if (!eventId) { err.textContent = 'Choose an event to register for.'; err.classList.add('show'); return; }
+  const chosenEvent = currentEvents.find(ev => String(ev.id) === String(eventId));
+  const autoClass = (chosenEvent && chosenEvent.classes && chosenEvent.classes.length) ? chosenEvent.classes[0] : 'General';
+
+  const blocks = Array.from(document.querySelectorAll('#membersWrap .member-block'));
+  const members = [];
+  for (const b of blocks) {
+    const name = b.querySelector('.mName').value.trim();
+    const department = b.querySelector('.mDept').value.trim();
+    const yearSem = b.querySelector('.mYear').value;
+    const contact = b.querySelector('.mContact').value.trim();
+    if (name || department || yearSem || contact) members.push({ name, department, yearSem, contact });
+  }
+  if (members.length < 2) { err.textContent = 'Enter at least 2 team members.'; err.classList.add('show'); return; }
+  for (const m of members) {
+    if (!m.name || !m.department || !m.yearSem || !m.contact) {
+      err.textContent = 'Fill in every field for each member you added.'; err.classList.add('show'); return;
+    }
+  }
+
+  const teamType = document.getElementById('rTeamType').value;
+  const { error: registrationError } = await supabaseClient
+  .from('participants')
+  .insert([{
+    event_id: Number(eventId),
+    name: teamName,
+    college: college,
+    members_json: members,
+    cls: autoClass,
+    team_type: teamType
+  }]);
+
+if (registrationError) {
+  console.error('Team registration error:', registrationError);
+  err.textContent =
+    registrationError.message || 'Could not register team.';
+  err.classList.add('show');
+  return;
+}
+
+  ok.classList.remove('hidden');
+  document.getElementById('rTeamName').value = '';
+  document.querySelectorAll('.team-type-opt').forEach(b => b.classList.toggle('active', b.dataset.type === 'internal'));
+  document.getElementById('rTeamType').value = 'internal';
+  buildMemberRows(2);
+  if (currentUser.role === 'admin') loadEvents();
+});
+
+document.getElementById('exportTeamTypeBtn').addEventListener('click', () => {
+  window.location.href = '/api/export/teams-by-type';
+});
+
+// ---------- Event timer / roster ----------
+async function openEvent(id) {
+  activeEvent = currentEvents.find(e => e.id === id);
+  document.getElementById('timerEventName').textContent = activeEvent.name;
+  document.getElementById('timerEventDesc').textContent = activeEvent.description;
+  document.getElementById('valueColHeader').textContent = activeEvent.type === 'score' ? 'Score' : 'Time';
+  goToPage('timer');
+  await loadParticipants();
+  if (timerInterval) clearInterval(timerInterval);
+  if (activeEvent.type === 'timed') timerInterval = setInterval(tick, 100);
+}
+document.getElementById('backToEvents').addEventListener('click', () => goToPage('events'));
+
+async function loadParticipants() {
+  const res = await fetch(`/api/events/${activeEvent.id}/participants`);
+  participants = await res.json();
+  if (participants.length > 0 && !activeExpandedTeamId) activeExpandedTeamId = participants[0].id;
+  renderRoster();
+}
+
+function formatTime(ms) {
+  const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), cs = Math.floor((ms % 1000) / 10);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+}
+
+function tick() {
+  participants.forEach(p => {
+    if (p.state === 'running') {
+      p.timeMs = Date.now() - p.startTs;
+      const bigTimerEl = document.querySelector(`.big-timer-val[data-pid="${p.id}"]`);
+      if (bigTimerEl) bigTimerEl.textContent = formatTime(p.timeMs);
+      const el = document.querySelector(`tr[data-pid="${p.id}"] .timer-val`);
+      if (el) el.textContent = formatTime(p.timeMs);
+      const badgeEl = document.querySelector(`.list-timer-val[data-pid="${p.id}"]`);
+      if (badgeEl) badgeEl.textContent = formatTime(p.timeMs);
+    }
+  });
+}
+
+function toggleTeamExpand(id) { activeExpandedTeamId = activeExpandedTeamId === id ? null : id; renderRoster(); }
+
+function membersLine(p, sep) {
+  const list = (p.members && p.members.length) ? p.members : [{ name: p.name, department: p.dept, yearSem: p.yearSem, contact: p.contact }];
+  return list.map(m => `${m.name || ''} (${m.department || '—'}, ${m.yearSem || '—'}) — ${m.contact || m.phone || '—'}${m.email ? ` — ${m.email}` : ''}`).join(sep);
+}
+
+function statusOf(p) {
+  if (activeEvent.type === 'score') return (p.score !== null && p.score !== undefined) ? 'finished' : 'idle';
+  return p.state;
+}
+function statusLabel(p) {
+  if (activeEvent.type === 'score') return (p.score !== null && p.score !== undefined) ? 'scored' : 'pending';
+  return p.state;
+}
+function valueDisplay(p) {
+  if (activeEvent.type === 'score') return (p.score !== null && p.score !== undefined) ? String(p.score) : '—';
+  return formatTime(p.timeMs || 0);
+}
+
+function controlsHtml(p, big) {
+  const cls = big ? 'btn-touch' : 'btn-sm';
+  if (activeEvent.type === 'score') {
+    return `
+      <div class="score-input-row">
+        <input type="number" class="score-input ${big ? 'score-input-big' : ''}" id="score-${p.id}" value="${p.score ?? ''}" placeholder="Score">
+        <button class="btn ${cls} btn-success" title="Save score" aria-label="Save score" onclick="saveScore(${p.id})">&#10003;</button>
+      </div>`;
+  }
+  return `
+    <button class="btn ${cls} btn-success" title="Start" aria-label="Start" onclick="startTimer(${p.id})">&#9654;</button>
+    <button class="btn ${cls} btn-stop" title="Stop" aria-label="Stop" onclick="stopTimer(${p.id})">&#9632;</button>
+    <button class="btn ${cls} btn-reset" title="Reset" aria-label="Reset" onclick="resetTimer(${p.id})">&#8635;</button>`;
+}
+
+function renderRoster() {
+  document.getElementById('totalCount').textContent = participants.length;
+  const container = document.getElementById('teamListContainer');
+  container.innerHTML = '';
+
+  participants.forEach((p, i) => {
+    const isExpanded = p.id === activeExpandedTeamId;
+    const members = (p.members && p.members.length) ? p.members : [{ name: p.name, department: p.dept, yearSem: p.yearSem, contact: p.contact }];
+    const item = document.createElement('div');
+    item.className = `team-card ${isExpanded ? 'expanded' : ''}`;
+    item.innerHTML = `
+      <div class="team-header" onclick="toggleTeamExpand(${p.id})">
+        <div class="team-header-main">
+          <span class="team-rank">#${i + 1}</span>
+          <div>
+            <div class="team-title">${esc(p.name)}</div>
+            <div class="team-sub">${esc(p.college || 'N/A')} • ${members.length} member${members.length > 1 ? 's' : ''} • <span class="type-badge ${p.teamType === 'external' ? 'external' : 'internal'}">${p.teamType === 'external' ? 'External' : 'Internal'}</span></div>
+          </div>
+        </div>
+        <div class="team-header-right">
+          <span class="list-timer-val timer-val" data-pid="${p.id}">${valueDisplay(p)}</span>
+          <span class="status-tag ${statusOf(p)}">${statusLabel(p)}</span>
+          <span class="chevron">${isExpanded ? '▲' : '▼'}</span>
+        </div>
+      </div>
+      ${isExpanded ? `
+        <div class="team-details-pane">
+          <div class="timer-box">
+            <span class="big-timer-val" data-pid="${p.id}">${valueDisplay(p)}</span>
+            <div class="timer-touch-controls">${controlsHtml(p, true)}</div>
+          </div>
+          <div class="details-grid">
+            ${members.map((m, mi) => `
+              <div class="detail-item">
+                <span class="detail-label">Member ${mi + 1}</span>
+                <span class="detail-val">${esc(m.name)} — ${esc(m.department || '—')}, ${esc(m.yearSem || '—')}<br><a href="tel:${esc(m.contact || m.phone || '')}">${esc(m.contact || m.phone || '—')}</a>${m.email ? `<br><a href="mailto:${esc(m.email)}">${esc(m.email)}</a>` : ''}</span>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}`;
+    container.appendChild(item);
+  });
+
+  const body = document.getElementById('rosterBody');
+  body.innerHTML = '';
+  participants.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.pid = p.id;
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td><b>${esc(p.name)}</b></td>
+      <td>${esc(p.college || 'N/A')}</td>
+      <td><span class="type-badge ${p.teamType === 'external' ? 'external' : 'internal'}">${p.teamType === 'external' ? 'External' : 'Internal'}</span></td>
+      <td style="white-space:normal;">${membersLine(p, '<br>')}</td>
+      <td class="timer-val">${valueDisplay(p)}</td>
+      <td><span class="payment-badge ${p.paymentStatus === 'paid' ? 'paid' : 'pending'}">${p.paymentStatus === 'paid' ? `Paid ₹${Number(p.amountPaid || 0).toFixed(0)}` : (p.paymentStatus || 'Not required')}</span></td>
+      <td><span class="status-tag ${statusOf(p)}">${statusLabel(p)}</span></td>
+      <td class="row-actions">${controlsHtml(p, false)}</td>`;
+    body.appendChild(tr);
+  });
+  renderPodium();
+}
+
+async function startTimer(id) {
+  const p = participants.find(x => x.id === id);
+  p.state = 'running'; p.startTs = Date.now() - (p.timeMs || 0);
+  renderRoster();
+}
+async function stopTimer(id) {
+  const p = participants.find(x => x.id === id);
+  if (p.state === 'running') {
+    p.state = 'finished';
+    await fetch(`/api/participants/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timeMs: p.timeMs, state: 'finished' }) });
+    renderRoster();
+  }
+}
+async function resetTimer(id) {
+  const p = participants.find(x => x.id === id);
+  p.state = 'idle'; p.timeMs = 0;
+  await fetch(`/api/participants/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timeMs: 0, state: 'idle' }) });
+  renderRoster();
+}
+async function saveScore(id) {
+  const p = participants.find(x => x.id === id);
+  const input = document.getElementById(`score-${id}`);
+  const val = input.value.trim();
+  if (val === '') return;
+  p.score = Number(val);
+  await fetch(`/api/participants/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: p.score }) });
+  renderRoster();
+}
+
+function renderPodium() {
+  const grid = document.getElementById('podiumGrid');
+  grid.innerHTML = '';
+  const isScore = activeEvent.type === 'score';
+  const ranked = participants
+    .filter(p => isScore ? (p.score !== null && p.score !== undefined) : p.state === 'finished')
+    .sort((a, b) => isScore ? (b.score - a.score) : (a.timeMs - b.timeMs));
+  const card = document.createElement('div');
+  card.className = 'panel podium-card';
+  card.innerHTML = `
+    <h4>Rankings</h4>
+    ${ranked.length ? ranked.map((p, i) => `
+      <div class="podium-row">
+        <span><b>Rank ${i + 1}:</b> ${esc(p.name)} <br><small style="color:var(--slate);">${esc(p.college || 'N/A')}</small></span>
+        <span class="timer-val">${isScore ? p.score : formatTime(p.timeMs)}</span>
+      </div>`).join('') : '<p style="color:var(--slate);font-size:0.84rem;margin-top:8px;">No completed entries yet.</p>'}`;
+  grid.appendChild(card);
+}
+
+// ---------- Exports: the server builds a styled .xlsx (colors, borders, ranking) ----------
+document.getElementById('exportExcelBtn').addEventListener('click', () => {
+  if (!participants.length) return alert('No registered participants to export.');
+  window.location.href = `/api/events/${activeEvent.id}/export`;
+});
+document.getElementById('exportAllBtn').addEventListener('click', () => { window.location.href = '/api/export/all'; });
+document.getElementById('exportAllBtn2').addEventListener('click', () => { window.location.href = '/api/export/all'; });
+
+// ---------- Manage Users ----------
+async function loadUsersList() {
+  try {
+    const [{ data: users, error: usersError }, { data: teams, error: teamsError }] =
+      await Promise.all([
+        supabaseClient.from('users').select('*').order('created_at', { ascending: false }),
+        supabaseClient.from('participants').select('*').order('created_at', { ascending: false })
+      ]);
+
+    if (usersError) throw usersError;
+    if (teamsError) throw teamsError;
+
+    const eventIds = [...new Set((teams || []).map(t => t.event_id).filter(Boolean))];
+    let events = [];
+    if (eventIds.length) {
+      const { data, error } = await supabaseClient
+        .from('events')
+        .select('id, name')
+        .in('id', eventIds);
+      if (error) throw error;
+      events = data || [];
+    }
+
+    const eventMap = Object.fromEntries(events.map(e => [Number(e.id), e.name]));
+
+    const normalizedUsers = (users || []).map(u => ({
+      ...u,
+      authProvider: u.auth_provider,
+      createdAt: u.created_at
+    }));
+
+    const normalizedTeams = (teams || []).map(t => ({
+      ...t,
+      teamName: t.name,
+      eventName: eventMap[Number(t.event_id)] || 'Event',
+      members: Array.isArray(t.members_json)
+        ? t.members_json
+        : (t.members_json ? JSON.parse(t.members_json) : []),
+      teamType: t.team_type,
+      paymentStatus: t.payment_status,
+      amountPaid: t.amount_paid,
+      transactionId: t.transaction_id,
+      paymentScreenshot: t.payment_screenshot,
+      paymentScreenshotUrl: t.payment_screenshot_path
+    }));
+
+    const members = normalizedUsers.filter(u => u.role === 'member');
+    const teamAccounts = normalizedUsers.filter(u => u.role === 'external');
+
+    const memberList = document.getElementById('clubMembersList');
+    const accountList = document.getElementById('teamAccountsList');
+    const teamList = document.getElementById('registeredTeamsList');
+
+    document.getElementById('clubMemberCount').textContent = members.length;
+    document.getElementById('registeredTeamCount').textContent = normalizedTeams.length;
+    document.getElementById('teamAccountCount').textContent = teamAccounts.length;
+    document.getElementById('registeredTeamListCount').textContent = normalizedTeams.length;
+
+    memberList.innerHTML = members.map(u => `
+      <div class="admin-row user-row-enhanced">
+        <div>
+          <b>${esc(u.name || '')}</b>
+          <span>${u.auid ? `AUID ${esc(u.auid)} · ${esc(u.usn || '')}` : esc(u.email || '')}</span>
+          <small>${esc(u.department || 'Department not set')} · ${esc(u.college || 'College not set')} · ${esc(u.phone || 'Phone not set')}</small>
+        </div>
+        ${u.id !== currentUser.id
+          ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Remove</button>`
+          : '<span class="current-user-badge">YOU</span>'}
+      </div>`).join('') || '<p class="empty-users">No club members yet.</p>';
+
+    accountList.innerHTML = teamAccounts.map(u => `
+      <div class="admin-row user-row-enhanced">
+        <div>
+          <b>${esc(u.name || 'Unnamed account')}</b>
+          <span>${esc(u.email || 'No email')} · ${u.authProvider === 'google' ? 'Google' : 'Email account'}</span>
+          <small>${esc(u.college || 'College not set')} · ${esc(u.phone || 'Phone not set')} · Joined ${esc(u.createdAt || '')}</small>
+        </div>
+        <div class="user-row-actions">
+          <span class="account-provider-badge ${u.authProvider === 'google' ? 'google' : ''}">
+            ${u.authProvider === 'google' ? 'GOOGLE' : 'ACCOUNT'}
+          </span>
+          <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Remove</button>
+        </div>
+      </div>`).join('') || '<p class="empty-users">No team-registration accounts yet.</p>';
+
+    teamList.innerHTML = normalizedTeams.map(t => {
+      const members = Array.isArray(t.members) ? t.members : [];
+      const memberText = members.map((m, i) => `${i + 1}. ${m.name || 'Unnamed member'}`).join(', ');
+      const paid = Number(t.amountPaid || 0) > 0
+        ? `₹${Number(t.amountPaid).toFixed(0)}`
+        : (t.paymentStatus === 'submitted_for_verification' ? 'Proof submitted' : (t.paymentStatus === 'paid' ? 'Paid' : 'Not required'));
+      const tx = t.transactionId ? esc(t.transactionId) : 'Not provided';
+      const proof = (t.paymentScreenshotUrl || t.paymentScreenshot)
+        ? `<button type="button" class="btn btn-sm btn-primary" onclick="viewPaymentProof(${Number(t.id)})">View Screenshot</button>`
+        : '<span class="payment-missing">No screenshot</span>';
+
+      return `
+        <div class="admin-row team-row-enhanced registered-team-card">
+          <div class="registered-team-main">
+            <div class="registered-team-title"><b>${esc(t.teamName || 'Unnamed team')}</b><span class="team-id-badge">#${esc(t.id)}</span></div>
+            <span>${esc(t.eventName || 'Event')} · ${esc(t.college || 'College not provided')} · ${t.teamType === 'external' ? 'External' : 'Internal'}</span>
+            <small>${esc(memberText || 'No member details')}</small>
+            <div class="payment-verification-card">
+              <div><label>PAYMENT STATUS</label><strong>${esc(paid)}</strong></div>
+              <div><label>TRANSACTION ID</label><strong class="transaction-value">${tx}</strong></div>
+              <div><label>PAYMENT PROOF</label><div>${proof}</div></div>
+              <div><label>ACTIONS</label><div><button type="button" class="btn btn-sm btn-danger" onclick="deleteRegisteredTeam(${Number(t.id)})">Remove Team</button></div></div>
+            </div>
+          </div>
+        </div>`;
+    }).join('') || '<p class="empty-users">No teams have registered yet.</p>';
+
+  } catch (e) {
+    console.error('Could not load users:', e);
+    document.getElementById('clubMembersList').innerHTML = `<p class="empty-users">Could not load users: ${esc(e.message)}</p>`;
+    document.getElementById('teamAccountsList').innerHTML = '';
+    document.getElementById('registeredTeamsList').innerHTML = '';
+  }
+}
+
+document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const name = document.getElementById('uName').value.trim();
+  const email = document.getElementById('uEmail').value.trim();
+  const password = document.getElementById('uPassword').value;
+  const role = document.getElementById('uRole').value;
+
+  if (!name || !email || !password) {
+    alert('Please fill in all required fields.');
+    return;
+  }
+
+  try {
+    const { data: created, error: authError } = await supabaseClient.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name, role }
+      }
+    });
+
+    if (authError) throw authError;
+
+    if (!created.user) throw new Error('Could not create the user account.');
+
+    const { error: profileError } = await supabaseClient
+      .from('users')
+      .update({ name, role })
+      .eq('auth_user_id', created.user.id);
+
+    if (profileError) throw profileError;
+
+    document.getElementById('addUserForm').reset();
+    alert('User account created successfully.');
+    await loadUsersList();
+
+  } catch (e) {
+    console.error('Could not add user:', e);
+    alert('Could not add user: ' + e.message);
+  }
+});
+
+async function deleteUser(id) {
+  if (!confirm('Remove this user account? This will revoke their portal sign-in access.')) return;
+
+  try {
+    const { data: user, error: lookupError } = await supabaseClient
+      .from('users')
+      .select('id, auth_user_id')
+      .eq('id', id)
+      .single();
+
+    if (lookupError) throw lookupError;
+
+    if (user.auth_user_id) {
+      alert('The user profile can be removed here, but Supabase Auth account deletion requires the server-side Admin API. The profile will be removed now.');
+    }
+
+    const { error } = await supabaseClient
+      .from('users')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    await loadUsersList();
+
+  } catch (e) {
+    console.error('Could not remove user:', e);
+    alert('Could not remove the user: ' + e.message);
+  }
+}
+
+// ---------- Settings: cycle code ----------
 async function loadCycleCode() {
   const res = await fetch('/api/settings/cycle-code');
   const data = await res.json();
