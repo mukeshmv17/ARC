@@ -38,6 +38,14 @@ function setLoginMode(mode) {
 
 adminLoginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  e.stopPropagation();
+
+  loginMode = 'admin';
+  tabAdmin.classList.add('active');
+  tabUser.classList.remove('active');
+  adminNotice.style.display = 'block';
+  adminLoginForm.classList.remove('hidden');
+  memberLoginForm.classList.add('hidden');
 
   const email = document.getElementById('adminEmail').value.trim();
   const password = document.getElementById('adminPassword').value.trim();
@@ -87,6 +95,8 @@ adminLoginForm.addEventListener('submit', async (e) => {
 
 memberLoginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  e.stopPropagation();
+  if (loginMode !== 'user') return;
   const auid = document.getElementById('memberAuid').value.trim();
   const phone = document.getElementById('memberPhone').value.trim();
   const err = document.getElementById('memberFormError');
