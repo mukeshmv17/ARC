@@ -205,9 +205,27 @@ document.querySelectorAll('.nav-item').forEach(btn => {
 
 // ---------- Events ----------
 async function loadEvents() {
-  const res = await fetch('/api/events');
-  currentEvents = await res.json();
-  renderEvents();
+  try {
+    const { data, error } = await supabaseClient
+      .from('events')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    currentEvents = (data || []).map(ev => ({
+      ...ev,
+      registrationFee: ev.registration_fee,
+      assignedUserIds: ev.assigned_user_ids || [],
+      details: ev.details_json || {},
+      rules: ev.rules_json || {}
+    }));
+
+    renderEvents();
+  } catch (error) {
+    console.error('Could not load events:', error);
+    alert('Could not load events: ' + error.message);
+  }
 }
 
 function renderEvents() {
@@ -228,8 +246,23 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s == 
 
 async function deleteEvent(id) {
   if (!confirm('Are you sure you want to delete this event?')) return;
-  await fetch(`/api/events/${id}`, { method: 'DELETE' });
-  loadEvents();
+
+  try {
+    const { error } = await supabaseClient
+      .from('events')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    await loadEvents();
+
+  } catch (error) {
+    console.error('Could not delete event:', error);
+    alert('Could not delete event: ' + error.message);
+  }
 }
 
 const addEventModal = document.getElementById('addEventModal');
@@ -239,27 +272,120 @@ document.getElementById('evImage').addEventListener('change', e => { const file=
 
 async function loadAssignUsersList() {
   const wrap = document.getElementById('assignUsersList');
-  wrap.innerHTML = '<p style="color:var(--slate);font-size:0.82rem;">Loading members…</p>';
-  const res = await fetch('/api/users');
-  const users = (await res.json()).filter(u => u.role === 'member');
-  if (!users.length) { wrap.innerHTML = '<p style="color:var(--slate);font-size:0.82rem;">No self-registered members yet.</p>'; return; }
-  wrap.innerHTML = users.map(u => `
-    <label class="assign-user-row">
-      <input type="checkbox" value="${u.id}" class="assignUserCheck">
-      <span>${esc(u.name)}${u.auid ? ` — ${esc(u.auid)}` : ''}</span>
-    </label>`).join('');
+
+  wrap.innerHTML =
+    '<p style="color:var(--slate);font-size:0.82rem;">Loading members…</p>';
+
+  try {
+    const { data: users, error } = await supabaseClient
+      .from('users')
+      .select('id, name, auid, role')
+      .eq('role', 'member')
+      .order('name', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    if (!users || !users.length) {
+      wrap.innerHTML =
+        '<p style="color:var(--slate);font-size:0.82rem;">No self-registered members yet.</p>';
+      return;
+    }
+
+    wrap.innerHTML = users.map(u => `
+      <label class="assign-user-row">
+        <input type="checkbox" value="${u.id}" class="assignUserCheck">
+        <span>${esc(u.name)}${u.auid ? ` — ${esc(u.auid)}` : ''}</span>
+      </label>
+    `).join('');
+
+  } catch (error) {
+    console.error('Could not load members:', error);
+
+    wrap.innerHTML =
+      '<p style="color:#dc2626;font-size:0.82rem;">Could not load members.</p>';
+  }
 }
 
 document.getElementById('addEventForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const imageFile = document.getElementById('evImage').files[0];
-  let image = null;
-  if (imageFile) { if(imageFile.size>2*1024*1024){alert('Please choose an image under 2 MB.');return;} image = await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(imageFile);}); }
-  saveActiveRule(); const rules = {}; Object.keys(ruleEditors).forEach(k => rules[k] = ruleEditors[k]); rules.__titles = Object.fromEntries(ruleKeys.map(([k,l]) => [k,l]));
-  const details = {date:document.getElementById('evDate').value.trim(),venue:document.getElementById('evVenue').value.trim(),teamSize:document.getElementById('evTeamSize').value.trim(),prize:document.getElementById('evPrize').value.trim(),deadline:document.getElementById('evDeadline').value.trim(),paymentLink:document.getElementById('evPaymentLink').value.trim()};
-  const body={name:document.getElementById('evName').value.trim(),type:document.getElementById('evType').value,description:document.getElementById('evDesc').value.trim(),registrationFee:Number(document.getElementById('evFee').value||0),image,details,rules,assignedUserIds:Array.from(document.querySelectorAll('.assignUserCheck:checked')).map(c=>Number(c.value))};
-  const r=await fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const d=await r.json(); if(!r.ok){alert(d.error||'Could not create event.');return;}
-  addEventModal.classList.add('hidden'); document.getElementById('addEventForm').reset(); resetRuleEditor(); loadEvents();
+
+  try {
+    const imageFile = document.getElementById('evImage').files[0];
+
+    let image = null;
+
+    if (imageFile) {
+      if (imageFile.size > 2 * 1024 * 1024) {
+        alert('Please choose an image under 2 MB.');
+        return;
+      }
+
+      image = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(imageFile);
+      });
+    }
+
+    saveActiveRule();
+
+    const rules = {};
+    Object.keys(ruleEditors).forEach(k => {
+      rules[k] = ruleEditors[k];
+    });
+
+    rules.__titles = Object.fromEntries(
+      ruleKeys.map(([k, l]) => [k, l])
+    );
+
+    const details = {
+      date: document.getElementById('evDate').value.trim(),
+      venue: document.getElementById('evVenue').value.trim(),
+      teamSize: document.getElementById('evTeamSize').value.trim(),
+      prize: document.getElementById('evPrize').value.trim(),
+      deadline: document.getElementById('evDeadline').value.trim(),
+      paymentLink: document.getElementById('evPaymentLink').value.trim()
+    };
+
+    const eventData = {
+      name: document.getElementById('evName').value.trim(),
+      type: document.getElementById('evType').value,
+      description: document.getElementById('evDesc').value.trim(),
+      registration_fee: Number(
+        document.getElementById('evFee').value || 0
+      ),
+      image: image,
+      classes: null,
+      assigned_user_ids: Array.from(
+        document.querySelectorAll('.assignUserCheck:checked')
+      ).map(c => Number(c.value)),
+      details_json: details,
+      rules_json: rules
+    };
+
+    const { error } = await supabaseClient
+      .from('events')
+      .insert([eventData]);
+
+    if (error) {
+      throw error;
+    }
+
+    alert('Event created successfully.');
+
+    addEventModal.classList.add('hidden');
+    document.getElementById('addEventForm').reset();
+    resetRuleEditor();
+
+    await loadEvents();
+
+  } catch (error) {
+    console.error('Event creation error:', error);
+    alert('Could not create event: ' + error.message);
+  }
 });
 
 // ---------- Rich event rules editor ----------
