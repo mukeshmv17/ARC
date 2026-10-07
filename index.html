@@ -56,7 +56,7 @@
           <input type="password" id="adminPassword" required placeholder="Enter password">
         </div>
         <p class="error" id="adminFormError">Invalid login credentials.</p>
-        <button type="submit" class="submit">Sign in</button>
+        <button type="button" class="submit" id="adminSignInBtn">Sign in</button>
       </form>
 
       <!-- Member: AUID + phone number -->
@@ -338,7 +338,47 @@
 <div class="modal-backdrop hidden" id="contactModal"><div class="modal"><h2 id="contactModalTitle">Add Contact</h2><form id="contactForm"><input type="hidden" id="contactId"><div class="field"><label>Name</label><input id="contactName" required></div><div class="field"><label>Role</label><input id="contactRole" placeholder="Event Coordinator"></div><div class="field"><label>Phone</label><input id="contactPhone"></div><div class="field"><label>Email</label><input id="contactEmail" type="email"></div><div class="modal-actions"><button type="button" class="btn" id="cancelContact">Cancel</button><button type="submit" class="btn btn-primary">Save Contact</button></div></form></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=20261006-admin-submit-fix-2"></script>
+<script src="app.js?v=20261007-admin-direct-login"></script>
+<script>
+(function(){
+  var btn=document.getElementById("adminSignInBtn");
+  if(btn){
+    btn.addEventListener("click", async function(){
+      var email=document.getElementById("adminEmail").value.trim();
+      var password=document.getElementById("adminPassword").value.trim();
+      var err=document.getElementById("adminFormError");
+      err.classList.remove("show");
+      if(!email || !password){
+        err.textContent="Please enter email and password.";
+        err.classList.add("show");
+        return;
+      }
+      btn.disabled=true;
+      btn.textContent="Signing in...";
+      try{
+        var authResult=await supabaseClient.auth.signInWithPassword({email:email,password:password});
+        if(authResult.error) throw new Error(authResult.error.message);
+        var authUser=authResult.data.user;
+        var profileResult=await supabaseClient.from("users").select("*").eq("auth_id",authUser.id).maybeSingle();
+        if(profileResult.error) throw new Error(profileResult.error.message);
+        if(!profileResult.data) throw new Error("Admin profile not found for this account.");
+        if(profileResult.data.role!=="admin"){
+          await supabaseClient.auth.signOut();
+          throw new Error("Access denied. This account is not an admin.");
+        }
+        currentUser=profileResult.data;
+        enterApp();
+      }catch(ex){
+        err.textContent=ex.message||"Admin login failed.";
+        err.classList.add("show");
+      }finally{
+        btn.disabled=false;
+        btn.textContent="Sign in";
+      }
+    });
+  }
+})();
+</script>
 <script>
 (function(){
   function initPortalUI(){
