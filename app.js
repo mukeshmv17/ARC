@@ -216,21 +216,26 @@ document.querySelectorAll('.nav-item').forEach(btn => {
 // ---------- Events ----------
 async function loadEvents() {
   try {
-    const { data, error } = await supabaseClient
-      .from('events')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    currentEvents = (data || []).map(ev => ({
+    const [{ data: events, error: eventsError }, { data: registrations, error: registrationsError }] =
+      await Promise.all([
+        supabaseClient.from('events').select('*').order('created_at', { ascending: false }),
+        supabaseClient.from('participants').select('id, event_id')
+      ]);
+    if (eventsError) throw eventsError;
+    if (registrationsError) throw registrationsError;
+    const registrationCounts = {};
+    (registrations || []).forEach(row => {
+      const key = Number(row.event_id);
+      registrationCounts[key] = (registrationCounts[key] || 0) + 1;
+    });
+    currentEvents = (events || []).map(ev => ({
       ...ev,
       registrationFee: ev.registration_fee,
       assignedUserIds: ev.assigned_user_ids || [],
       details: ev.details_json || {},
-      rules: ev.rules_json || {}
+      rules: ev.rules_json || {},
+      registeredCount: registrationCounts[Number(ev.id)] || 0
     }));
-
     renderEvents();
   } catch (error) {
     console.error('Could not load events:', error);
@@ -247,7 +252,7 @@ function renderEvents() {
     const d = ev.details || {};
     card.innerHTML = `${ev.image ? `<img class="portal-event-image" src="${ev.image}" alt="${esc(ev.name)}">` : `<div class="event-image-placeholder">ROBOTICS EVENT</div>`}
       <span class="event-tag">${esc(ev.type)}</span><h3>${esc(ev.name)}</h3>
-      <div class="event-meta-line"><span>${esc(d.date || 'Date TBA')}</span><span>${Number(ev.registrationFee||0)>0 ? `₹${Number(ev.registrationFee).toFixed(0)}` : 'FREE'}</span></div>
+      <div class="event-meta-line"><span>${esc(d.date || 'Date TBA')}</span><span>${Number(ev.registrationFee||0)>0 ? `₹${Number(ev.registrationFee).toFixed(0)}` : 'FREE'}</span></div><div class="event-meta-line"><span>Registered Teams</span><span>${Number(ev.registeredCount || 0)}</span></div>
       <div class="event-foot"><button class="btn btn-primary btn-sm" onclick="openEvent(${ev.id})">Open Event</button>${currentUser.role === 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteEvent(${ev.id})">Delete</button>` : ''}</div>`;
     grid.appendChild(card);
   });
@@ -448,18 +453,6 @@ document.querySelectorAll('#editorToolbar [data-cmd]').forEach(el=>el.addEventLi
 document.getElementById('insertRuleTable').onclick=()=>{const rows=Math.max(1,Number(prompt('Rows','3'))||3),cols=Math.max(1,Number(prompt('Columns','3'))||3);let html='<table><tbody>';for(let r=0;r<rows;r++){html+='<tr>';for(let c=0;c<cols;c++)html+=`<td>Cell ${r+1}.${c+1}</td>`;html+='</tr>';}html+='</tbody></table><p></p>';execRule('insertHTML',html);};
 document.getElementById('insertRuleLink').onclick=()=>{const url=prompt('Link URL');if(url)execRule('createLink',url);}; document.getElementById('clearRuleFormat').onclick=()=>execRule('removeFormat');
 renderRuleTabs();
-
-// ---------- Registration control ----------
-async function loadRegistrationControl(){try{const r=await fetch('/api/settings/registration');const d=await r.json();const t=document.getElementById('registrationOpenToggle');t.checked=!!d.open;document.getElementById('registrationOpenLabel').textContent=d.open?'OPEN':'CLOSED';}catch(e){}}
-document.getElementById('registrationOpenToggle').addEventListener('change',async e=>{const open=e.target.checked;await fetch('/api/settings/registration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({open})});document.getElementById('registrationOpenLabel').textContent=open?'OPEN':'CLOSED';});
-
-// ---------- Contacts ----------
-async function loadContacts(){const wrap=document.getElementById('contactsAdminList'); if(!wrap)return; try{const rows=await (await fetch('/api/contacts')).json();wrap.innerHTML=rows.map(c=>`<div class="contact-admin-row"><div><b>${esc(c.name)}</b><span>${esc(c.role||'')}</span><small>${esc(c.phone||'')} · ${esc(c.email||'')}</small></div><div><button class="btn btn-sm" onclick="editContact(${c.id})">Edit</button><button class="btn btn-sm btn-danger" onclick="deleteContact(${c.id})">Delete</button></div></div>`).join('')||'<p class="panel-hint">No contacts yet.</p>';window.contactRows=rows;}catch(e){wrap.innerHTML='<p class="error show">Could not load contacts.</p>';}}
-document.getElementById('addContactBtn').onclick=()=>{document.getElementById('contactModalTitle').textContent='Add Contact';document.getElementById('contactForm').reset();document.getElementById('contactId').value='';document.getElementById('contactModal').classList.remove('hidden')}; document.getElementById('cancelContact').onclick=()=>document.getElementById('contactModal').classList.add('hidden');
-window.editContact=id=>{const c=(window.contactRows||[]).find(x=>x.id===id);if(!c)return;document.getElementById('contactModalTitle').textContent='Edit Contact';document.getElementById('contactId').value=c.id;document.getElementById('contactName').value=c.name||'';document.getElementById('contactRole').value=c.role||'';document.getElementById('contactPhone').value=c.phone||'';document.getElementById('contactEmail').value=c.email||'';document.getElementById('contactModal').classList.remove('hidden')};
-window.deleteContact=async id=>{if(!confirm('Delete this contact?'))return;await fetch('/api/contacts/'+id,{method:'DELETE'});loadContacts()};
-document.getElementById('contactForm').onsubmit=async e=>{e.preventDefault();const id=document.getElementById('contactId').value;const body={name:document.getElementById('contactName').value.trim(),role:document.getElementById('contactRole').value.trim(),phone:document.getElementById('contactPhone').value.trim(),email:document.getElementById('contactEmail').value.trim()};const r=await fetch(id?'/api/contacts/'+id:'/api/contacts',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){alert('Could not save contact.');return;}document.getElementById('contactModal').classList.add('hidden');loadContacts()};
-
 
 // ---------- Schedule management ----------
 let scheduleRows = [];
@@ -942,10 +935,35 @@ async function openEvent(id) {
 document.getElementById('backToEvents').addEventListener('click', () => goToPage('events'));
 
 async function loadParticipants() {
-  const res = await fetch(`/api/events/${activeEvent.id}/participants`);
-  participants = await res.json();
-  if (participants.length > 0 && !activeExpandedTeamId) activeExpandedTeamId = participants[0].id;
-  renderRoster();
+  try {
+    const { data, error } = await supabaseClient
+      .from('participants')
+      .select('*')
+      .eq('event_id', Number(activeEvent.id))
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    participants = (data || []).map(p => ({
+      ...p,
+      members: Array.isArray(p.members_json) ? p.members_json : (p.members_json ? JSON.parse(p.members_json) : []),
+      teamType: p.team_type || 'internal',
+      paymentStatus: p.payment_status || 'Not required',
+      amountPaid: p.amount_paid || 0,
+      transactionId: p.transaction_id || '',
+      paymentScreenshot: p.payment_screenshot || null,
+      paymentScreenshotUrl: p.payment_screenshot_path || null,
+      timeMs: Number(p.time_ms ?? p.timeMs ?? 0),
+      startTs: Number(p.start_ts ?? p.startTs ?? 0),
+      state: p.state || 'idle',
+      score: p.score ?? null
+    }));
+    activeExpandedTeamId = participants.length ? participants[0].id : null;
+    renderRoster();
+  } catch (error) {
+    console.error('Could not load registered teams for event:', error);
+    participants = [];
+    renderRoster();
+    alert('Could not load registered teams: ' + error.message);
+  }
 }
 
 function formatTime(ms) {
@@ -1073,14 +1091,14 @@ async function stopTimer(id) {
   const p = participants.find(x => x.id === id);
   if (p.state === 'running') {
     p.state = 'finished';
-    await fetch(`/api/participants/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timeMs: p.timeMs, state: 'finished' }) });
+    const { error } = await supabaseClient.from('participants').update({ time_ms: p.timeMs, state: 'finished' }).eq('id', id); if (error) throw error;
     renderRoster();
   }
 }
 async function resetTimer(id) {
   const p = participants.find(x => x.id === id);
   p.state = 'idle'; p.timeMs = 0;
-  await fetch(`/api/participants/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timeMs: 0, state: 'idle' }) });
+  const { error } = await supabaseClient.from('participants').update({ time_ms: 0, state: 'idle' }).eq('id', id); if (error) throw error;
   renderRoster();
 }
 async function saveScore(id) {
@@ -1089,7 +1107,7 @@ async function saveScore(id) {
   const val = input.value.trim();
   if (val === '') return;
   p.score = Number(val);
-  await fetch(`/api/participants/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: p.score }) });
+  const { error } = await supabaseClient.from('participants').update({ score: p.score }).eq('id', id); if (error) throw error;
   renderRoster();
 }
 
@@ -1120,6 +1138,49 @@ document.getElementById('exportExcelBtn').addEventListener('click', () => {
 document.getElementById('exportAllBtn').addEventListener('click', () => { window.location.href = '/api/export/all'; });
 document.getElementById('exportAllBtn2').addEventListener('click', () => { window.location.href = '/api/export/all'; });
 
+// ---------- Registered team actions ----------
+window.deleteRegisteredTeam = async function(id) {
+  if (!currentUser || currentUser.role !== 'admin') { alert('Only an admin can remove registered teams.'); return; }
+  if (!confirm('Remove this registered team? This cannot be undone.')) return;
+  try {
+    const { data: team, error: lookupError } = await supabaseClient.from('participants').select('id, payment_screenshot_path').eq('id', Number(id)).maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!team) throw new Error('Registered team not found.');
+    const { error: deleteError } = await supabaseClient.from('participants').delete().eq('id', Number(id));
+    if (deleteError) throw deleteError;
+    const path = team.payment_screenshot_path;
+    if (path && typeof path === 'string' && !path.startsWith('http') && !path.startsWith('data:')) {
+      const { error: storageError } = await supabaseClient.storage.from('payment-screenshots').remove([path]);
+      if (storageError) console.warn('Payment proof cleanup failed:', storageError.message);
+    }
+    await loadEvents();
+    await loadRegisterTeamsList();
+    await loadUsersList();
+    if (activeEvent) await loadParticipants();
+    alert('Registered team removed successfully.');
+  } catch (error) {
+    console.error('Could not remove registered team:', error);
+    alert('Could not remove registered team: ' + error.message);
+  }
+};
+
+window.viewPaymentProof = async function(id) {
+  try {
+    const { data: team, error } = await supabaseClient.from('participants').select('payment_screenshot, payment_screenshot_path').eq('id', Number(id)).maybeSingle();
+    if (error) throw error;
+    if (!team) throw new Error('Registered team not found.');
+    const raw = team.payment_screenshot || team.payment_screenshot_path;
+    if (!raw) { alert('No payment proof is available for this team.'); return; }
+    if (raw.startsWith('data:') || raw.startsWith('http')) { window.open(raw, '_blank', 'noopener,noreferrer'); return; }
+    const { data, error: signedError } = await supabaseClient.storage.from('payment-screenshots').createSignedUrl(raw, 300);
+    if (signedError) throw signedError;
+    if (!data?.signedUrl) throw new Error('Could not create a secure payment-proof URL.');
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+  } catch (error) {
+    console.error('Could not view payment proof:', error);
+    alert('Could not view payment proof: ' + error.message);
+  }
+};
 // ---------- Manage Users ----------
 async function loadUsersList() {
   try {
@@ -1269,7 +1330,7 @@ document.getElementById('addUserForm').addEventListener('submit', async (e) => {
     const { error: profileError } = await supabaseClient
       .from('users')
       .update({ name, role })
-      .eq('auth_user_id', created.user.id);
+      .eq('auth_id', created.user.id);
 
     if (profileError) throw profileError;
 
@@ -1289,13 +1350,13 @@ async function deleteUser(id) {
   try {
     const { data: user, error: lookupError } = await supabaseClient
       .from('users')
-      .select('id, auth_user_id')
+      .select('id, auth_id')
       .eq('id', id)
       .single();
 
     if (lookupError) throw lookupError;
 
-    if (user.auth_user_id) {
+    if (user.auth_id) {
       alert('The user profile can be removed here, but Supabase Auth account deletion requires the server-side Admin API. The profile will be removed now.');
     }
 
@@ -1901,14 +1962,14 @@ async function stopTimer(id) {
   const p = participants.find(x => x.id === id);
   if (p.state === 'running') {
     p.state = 'finished';
-    await fetch(`/api/participants/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timeMs: p.timeMs, state: 'finished' }) });
+    const { error } = await supabaseClient.from('participants').update({ time_ms: p.timeMs, state: 'finished' }).eq('id', id); if (error) throw error;
     renderRoster();
   }
 }
 async function resetTimer(id) {
   const p = participants.find(x => x.id === id);
   p.state = 'idle'; p.timeMs = 0;
-  await fetch(`/api/participants/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timeMs: 0, state: 'idle' }) });
+  const { error } = await supabaseClient.from('participants').update({ time_ms: 0, state: 'idle' }).eq('id', id); if (error) throw error;
   renderRoster();
 }
 async function saveScore(id) {
@@ -1917,7 +1978,7 @@ async function saveScore(id) {
   const val = input.value.trim();
   if (val === '') return;
   p.score = Number(val);
-  await fetch(`/api/participants/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: p.score }) });
+  const { error } = await supabaseClient.from('participants').update({ score: p.score }).eq('id', id); if (error) throw error;
   renderRoster();
 }
 
@@ -1947,199 +2008,4 @@ document.getElementById('exportExcelBtn').addEventListener('click', () => {
 });
 document.getElementById('exportAllBtn').addEventListener('click', () => { window.location.href = '/api/export/all'; });
 document.getElementById('exportAllBtn2').addEventListener('click', () => { window.location.href = '/api/export/all'; });
-
-// ---------- Manage Users ----------
-async function loadUsersList() {
-  try {
-    const [{ data: users, error: usersError }, { data: teams, error: teamsError }] =
-      await Promise.all([
-        supabaseClient.from('users').select('*').order('created_at', { ascending: false }),
-        supabaseClient.from('participants').select('*').order('created_at', { ascending: false })
-      ]);
-
-    if (usersError) throw usersError;
-    if (teamsError) throw teamsError;
-
-    const eventIds = [...new Set((teams || []).map(t => t.event_id).filter(Boolean))];
-    let events = [];
-    if (eventIds.length) {
-      const { data, error } = await supabaseClient
-        .from('events')
-        .select('id, name')
-        .in('id', eventIds);
-      if (error) throw error;
-      events = data || [];
-    }
-
-    const eventMap = Object.fromEntries(events.map(e => [Number(e.id), e.name]));
-
-    const normalizedUsers = (users || []).map(u => ({
-      ...u,
-      authProvider: u.auth_provider,
-      createdAt: u.created_at
-    }));
-
-    const normalizedTeams = (teams || []).map(t => ({
-      ...t,
-      teamName: t.name,
-      eventName: eventMap[Number(t.event_id)] || 'Event',
-      members: Array.isArray(t.members_json)
-        ? t.members_json
-        : (t.members_json ? JSON.parse(t.members_json) : []),
-      teamType: t.team_type,
-      paymentStatus: t.payment_status,
-      amountPaid: t.amount_paid,
-      transactionId: t.transaction_id,
-      paymentScreenshot: t.payment_screenshot,
-      paymentScreenshotUrl: t.payment_screenshot_path
-    }));
-
-    const members = normalizedUsers.filter(u => u.role === 'member');
-    const teamAccounts = normalizedUsers.filter(u => u.role === 'external');
-
-    const memberList = document.getElementById('clubMembersList');
-    const accountList = document.getElementById('teamAccountsList');
-    const teamList = document.getElementById('registeredTeamsList');
-
-    document.getElementById('clubMemberCount').textContent = members.length;
-    document.getElementById('registeredTeamCount').textContent = normalizedTeams.length;
-    document.getElementById('teamAccountCount').textContent = teamAccounts.length;
-    document.getElementById('registeredTeamListCount').textContent = normalizedTeams.length;
-
-    memberList.innerHTML = members.map(u => `
-      <div class="admin-row user-row-enhanced">
-        <div>
-          <b>${esc(u.name || '')}</b>
-          <span>${u.auid ? `AUID ${esc(u.auid)} · ${esc(u.usn || '')}` : esc(u.email || '')}</span>
-          <small>${esc(u.department || 'Department not set')} · ${esc(u.college || 'College not set')} · ${esc(u.phone || 'Phone not set')}</small>
-        </div>
-        ${u.id !== currentUser.id
-          ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Remove</button>`
-          : '<span class="current-user-badge">YOU</span>'}
-      </div>`).join('') || '<p class="empty-users">No club members yet.</p>';
-
-    accountList.innerHTML = teamAccounts.map(u => `
-      <div class="admin-row user-row-enhanced">
-        <div>
-          <b>${esc(u.name || 'Unnamed account')}</b>
-          <span>${esc(u.email || 'No email')} · ${u.authProvider === 'google' ? 'Google' : 'Email account'}</span>
-          <small>${esc(u.college || 'College not set')} · ${esc(u.phone || 'Phone not set')} · Joined ${esc(u.createdAt || '')}</small>
-        </div>
-        <div class="user-row-actions">
-          <span class="account-provider-badge ${u.authProvider === 'google' ? 'google' : ''}">
-            ${u.authProvider === 'google' ? 'GOOGLE' : 'ACCOUNT'}
-          </span>
-          <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Remove</button>
-        </div>
-      </div>`).join('') || '<p class="empty-users">No team-registration accounts yet.</p>';
-
-    teamList.innerHTML = normalizedTeams.map(t => {
-      const members = Array.isArray(t.members) ? t.members : [];
-      const memberText = members.map((m, i) => `${i + 1}. ${m.name || 'Unnamed member'}`).join(', ');
-      const paid = Number(t.amountPaid || 0) > 0
-        ? `₹${Number(t.amountPaid).toFixed(0)}`
-        : (t.paymentStatus === 'submitted_for_verification' ? 'Proof submitted' : (t.paymentStatus === 'paid' ? 'Paid' : 'Not required'));
-      const tx = t.transactionId ? esc(t.transactionId) : 'Not provided';
-      const proof = (t.paymentScreenshotUrl || t.paymentScreenshot)
-        ? `<button type="button" class="btn btn-sm btn-primary" onclick="viewPaymentProof(${Number(t.id)})">View Screenshot</button>`
-        : '<span class="payment-missing">No screenshot</span>';
-
-      return `
-        <div class="admin-row team-row-enhanced registered-team-card">
-          <div class="registered-team-main">
-            <div class="registered-team-title"><b>${esc(t.teamName || 'Unnamed team')}</b><span class="team-id-badge">#${esc(t.id)}</span></div>
-            <span>${esc(t.eventName || 'Event')} · ${esc(t.college || 'College not provided')} · ${t.teamType === 'external' ? 'External' : 'Internal'}</span>
-            <small>${esc(memberText || 'No member details')}</small>
-            <div class="payment-verification-card">
-              <div><label>PAYMENT STATUS</label><strong>${esc(paid)}</strong></div>
-              <div><label>TRANSACTION ID</label><strong class="transaction-value">${tx}</strong></div>
-              <div><label>PAYMENT PROOF</label><div>${proof}</div></div>
-              <div><label>ACTIONS</label><div><button type="button" class="btn btn-sm btn-danger" onclick="deleteRegisteredTeam(${Number(t.id)})">Remove Team</button></div></div>
-            </div>
-          </div>
-        </div>`;
-    }).join('') || '<p class="empty-users">No teams have registered yet.</p>';
-
-  } catch (e) {
-    console.error('Could not load users:', e);
-    document.getElementById('clubMembersList').innerHTML = `<p class="empty-users">Could not load users: ${esc(e.message)}</p>`;
-    document.getElementById('teamAccountsList').innerHTML = '';
-    document.getElementById('registeredTeamsList').innerHTML = '';
-  }
-}
-
-document.getElementById('addUserForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-
-  const name = document.getElementById('uName').value.trim();
-  const email = document.getElementById('uEmail').value.trim();
-  const password = document.getElementById('uPassword').value;
-  const role = document.getElementById('uRole').value;
-
-  if (!name || !email || !password) {
-    alert('Please fill in all required fields.');
-    return;
-  }
-
-  try {
-    const { data: created, error: authError } = await supabaseClient.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { name, role }
-      }
-    });
-
-    if (authError) throw authError;
-
-    if (!created.user) throw new Error('Could not create the user account.');
-
-    const { error: profileError } = await supabaseClient
-      .from('users')
-      .update({ name, role })
-      .eq('auth_user_id', created.user.id);
-
-    if (profileError) throw profileError;
-
-    document.getElementById('addUserForm').reset();
-    alert('User account created successfully.');
-    await loadUsersList();
-
-  } catch (e) {
-    console.error('Could not add user:', e);
-    alert('Could not add user: ' + e.message);
-  }
-});
-
-async function deleteUser(id) {
-  if (!confirm('Remove this user account? This will revoke their portal sign-in access.')) return;
-
-  try {
-    const { data: user, error: lookupError } = await supabaseClient
-      .from('users')
-      .select('id, auth_user_id')
-      .eq('id', id)
-      .single();
-
-    if (lookupError) throw lookupError;
-
-    if (user.auth_user_id) {
-      alert('The user profile can be removed here, but Supabase Auth account deletion requires the server-side Admin API. The profile will be removed now.');
-    }
-
-    const { error } = await supabaseClient
-      .from('users')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
-
-    await loadUsersList();
-
-  } catch (e) {
-    console.error('Could not remove user:', e);
-    alert('Could not remove the user: ' + e.message);
-  }
-}
-
 
