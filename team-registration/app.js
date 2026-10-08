@@ -12,8 +12,7 @@ let events=[], currentEvent=null, memberCount=2, currentUser=null, registrationO
 const $=id=>document.getElementById(id);
 const esc=s=>{const d=document.createElement('div');d.textContent=s??'';return d.innerHTML};
 const escHtml=s=>String(s||'').replace(/<script[\s\S]*?<\/script>/gi,'');
-async function get(path,opts={}){const r=await fetch(API+path,{headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed');return d}
-async async function loadEvents(){
+async function loadEvents(){
   try{
     const [{data:ev,error:evError},{data:contactsRows,error:contactsError},{data:scheduleRows,error:scheduleError},{data:setting,error:settingError}] = await Promise.all([
       supabaseClient.from('events').select('*').order('created_at',{ascending:false}),
@@ -53,7 +52,7 @@ function renderPublicScheduleRows(rows){
     return '<div class="public-schedule-row"><div class="schedule-date-block"><strong>'+esc(d)+'</strong><span>'+esc(s.time||'')+'</span></div><div class="schedule-info"><span class="schedule-event">'+esc(eventName)+'</span><h3>'+esc(s.title||'Schedule item')+'</h3><p>'+esc([s.venue?('Venue: '+s.venue):'',s.description||''].filter(Boolean).join(' · '))+'</p></div></div>';
   }).join(''):'<div class="schedule-card"><div><b>Schedule coming soon</b><span>The Robotics Club coordinator hasn\'t published a schedule yet.</span></div></div>';
 }
-async function updateRegistrationBanner(){const b=$('registrationBanner');if(b){b.textContent=registrationOpen?'OPEN':'CLOSED';b.className='registration-banner '+(registrationOpen?'open':'closed')}}
+function updateRegistrationBanner(){const b=$('registrationBanner');if(b){b.textContent=registrationOpen?'OPEN':'CLOSED';b.className='registration-banner '+(registrationOpen?'open':'closed')}}
 function formatPrize(value){const v=String(value||'').trim();if(!v)return 'TBA';if(v.includes('₹'))return v;if(/^([0-9][0-9,]*(?:\.[0-9]+)?)$/.test(v))return '₹'+v;return v;}
 function renderEvents(){const q=$('search').value.toLowerCase();const list=events.filter(e=>!q||e.name.toLowerCase().includes(q));$('eventsGrid').innerHTML=list.length?list.map(e=>{const d=e.details||{};return `<article class="event event-clickable" onclick="openEventDetails(${e.id})">${e.image?`<div class="event-image-wrap"><img class="event-image" src="${e.image}" alt="${esc(e.name)}"></div>`:`<div class="event-image-wrap event-image-placeholder">ROBOTICS EVENT</div>`}<div class="event-content"><div class="event-meta"><span>${esc(d.date||'DATE TBA')}</span><span>${Number(e.registrationFee||0)>0?'₹'+Number(e.registrationFee).toFixed(0):'FREE'}</span></div><h3>${esc(e.name)}</h3><div class="event-bottom"><span class="fee">${Number(e.registrationFee||0)>0?'Entry fee ₹'+Number(e.registrationFee).toFixed(0):'Free registration'}</span><button class="btn primary" onclick="event.stopPropagation();openEventDetails(${e.id})">View details</button></div></div></article>`}).join(''):'<div class="loading">No matching events found.</div>'}
 function renderContacts(){const wrap=$('publicContacts');if(!wrap)return;wrap.innerHTML=contacts.length?contacts.map(c=>`<div class="contact-box"><b>${esc(c.name)}</b><span>${esc(c.role||'Robotics Club')}</span>${c.phone?`<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>`:''}${c.email?`<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`:''}</div>`).join(''):'<div class="contact-box"><b>Robotics Club</b><span>Contact details will be published soon.</span></div>'}
