@@ -13,37 +13,59 @@ const $=id=>document.getElementById(id);
 const esc=s=>{const d=document.createElement('div');d.textContent=s??'';return d.innerHTML};
 const escHtml=s=>String(s||'').replace(/<script[\s\S]*?<\/script>/gi,'');
 async function loadEvents(){
-  try{
-    const [{data:ev,error:evError},{data:contactsRows,error:contactsError},{data:scheduleRows,error:scheduleError},{data:setting,error:settingError}] = await Promise.all([
-      supabaseClient.from('events').select('*').order('created_at',{ascending:false}),
-      supabaseClient.from('contacts').select('*').order('id',{ascending:true}),
-      supabaseClient.from('schedules').select('*').order('date',{ascending:true}),
-      supabaseClient.from('settings').select('value').eq('key','registration_open').maybeSingle()
-    ]);
-    if(evError) throw evError;
-    if(contactsError) throw contactsError;
-    if(scheduleError) throw scheduleError;
-    if(settingError) throw settingError;
-    events=(ev||[]).map(e=>({
+  const results = await Promise.allSettled([
+    supabaseClient.from('events').select('*').order('created_at',{ascending:false}),
+    supabaseClient.from('contacts').select('*').order('id',{ascending:true}),
+    supabaseClient.from('schedules').select('*').order('date',{ascending:true}),
+    supabaseClient.from('settings').select('value').eq('key','registration_open').maybeSingle()
+  ]);
+
+  const [eventsResult, contactsResult, scheduleResult, settingResult] = results;
+
+  if(eventsResult.status==='fulfilled' && !eventsResult.value.error){
+    const ev=eventsResult.value.data||[];
+    events=ev.map(e=>({
       ...e,
       registrationFee:Number(e.registration_fee||0),
       details:e.details_json||{},
       rules:e.rules_json||{}
     }));
-    contacts=contactsRows||[];
-    registrationOpen=setting ? (setting.value===true || setting.value==='true' || setting.value==='1') : true;
     $('eventCount').textContent=events.length;
     renderEvents();
-    renderContacts();
-    renderPublicScheduleRows(scheduleRows||[]);
-    updateRegistrationBanner();
-  }catch(e){
-    console.error('Could not load public portal data:',e);
-    $('eventsGrid').innerHTML='<div class="loading">Could not load events. Please refresh the registration portal.</div>';
-    const el=$('publicSchedule');
-    if(el)el.innerHTML='<div class="schedule-card"><div><b>Could not load schedule</b><span>Please refresh the registration portal.</span></div></div>';
+  }else{
+    console.error('Could not load events:',eventsResult.reason||eventsResult.value?.error);
+    events=[];
+    $('eventCount').textContent='0';
+    $('eventsGrid').innerHTML='<div class="loading">Events could not be loaded. Please refresh the page.</div>';
   }
+
+  if(contactsResult.status==='fulfilled' && !contactsResult.value.error){
+    contacts=contactsResult.value.data||[];
+    renderContacts();
+  }else{
+    console.error('Could not load contacts:',contactsResult.reason||contactsResult.value?.error);
+    contacts=[];
+    renderContacts();
+  }
+
+  if(scheduleResult.status==='fulfilled' && !scheduleResult.value.error){
+    renderPublicScheduleRows(scheduleResult.value.data||[]);
+  }else{
+    console.error('Could not load schedule:',scheduleResult.reason||scheduleResult.value?.error);
+    renderPublicScheduleRows([]);
+  }
+
+  if(settingResult.status==='fulfilled' && !settingResult.value.error){
+    const setting=settingResult.value.data;
+    registrationOpen=setting ? (setting.value===true || setting.value==='true' || setting.value==='1') : true;
+  }else{
+    console.error('Could not load registration setting:',settingResult.reason||settingResult.value?.error);
+    registrationOpen=true;
+  }
+
+  updateRegistrationBanner();
 }
+
 function renderPublicScheduleRows(rows){
   const el=$('publicSchedule'); if(!el)return;
   const eventMap=Object.fromEntries(events.map(e=>[String(e.id),e.name]));
@@ -67,12 +89,26 @@ $('signupBtn').onclick=()=>{setAuthMode('signup');openModal('authModal')};$('log
 function setAuthMode(mode){$('authSignupTab').classList.toggle('active',mode==='signup');$('authLoginTab').classList.toggle('active',mode==='login');$('signupForm').classList.toggle('hidden',mode!=='signup');$('loginForm').classList.toggle('hidden',mode!=='login');$('authTitle').textContent=mode==='signup'?'Create your account':'Welcome back';$('authSubtitle').textContent=mode==='signup'?'Use your college email to register and manage team entries.':'Sign in with the college email you used for registration.'}
 async function loadProfile(authUser){
   if(!authUser){currentUser=null;updateAuth();return null;}
-  const {data:profile,error}=await supabaseClient.from('users').select('*').eq('auth_id',authUser.id).maybeSingle();
-  if(error) throw error;
-  if(!profile){
-    currentUser={id:authUser.id,auth_id:authUser.id,email:authUser.email||'',name:authUser.user_metadata?.name||'',college:authUser.user_metadata?.college||'',phone:authUser.user_metadata?.phone||'',role:'member'};
-  }else{
-    currentUser=profile;
+  const fallback={
+    id:authUser.id,
+    auth_id:authUser.id,
+    email:authUser.email||'',
+    name:authUser.user_metadata?.name||'',
+    college:authUser.user_metadata?.college||'',
+    phone:authUser.user_metadata?.phone||'',
+    role:authUser.user_metadata?.role||'member'
+  };
+  try{
+    const {data:profile,error}=await supabaseClient.from('users').select('*').eq('auth_id',authUser.id).maybeSingle();
+    if(error){
+      console.warn('Could not load profile; continuing with Auth account:',error.message);
+      currentUser=fallback;
+    }else{
+      currentUser=profile||fallback;
+    }
+  }catch(error){
+    console.warn('Profile lookup failed; continuing with Auth account:',error);
+    currentUser=fallback;
   }
   updateAuth();
   return currentUser;
@@ -124,13 +160,19 @@ $('signupForm').onsubmit=async e=>{
 $('loginForm').onsubmit=async e=>{
   e.preventDefault(); $('loginError').textContent='';
   try{
-    const {data,error}=await supabaseClient.auth.signInWithPassword({
-      email:$('liEmail').value.trim(),password:$('liPassword').value
-    });
+    const email=$('liEmail').value.trim();
+    const password=$('liPassword').value;
+    const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
     if(error)throw error;
     await loadProfile(data.user);
     closeModals();
-  }catch(x){$('loginError').textContent=x.message||'Could not sign in.'}
+  }catch(x){
+    console.error('Sign-in failed:',x);
+    const msg=String(x.message||'Could not sign in.');
+    $('loginError').textContent=msg.includes('Email not confirmed')
+      ? 'Please verify your college email first, then sign in again.'
+      : msg;
+  }
 };
 
 function updateAuth(){
