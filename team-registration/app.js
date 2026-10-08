@@ -46,9 +46,10 @@ async function loadEvents(){
 }
 function renderPublicScheduleRows(rows){
   const el=$('publicSchedule'); if(!el)return;
+  const eventMap=Object.fromEntries(events.map(e=>[String(e.id),e.name]));
   el.innerHTML=rows.length?rows.map(s=>{
     const d=s.date||s.schedule_date||'TBA';
-    const eventName=s.event_name||s.eventName||'General';
+    const eventName=s.event_name||s.eventName||(s.event_id!=null?eventMap[String(s.event_id)]:'')||'General';
     return '<div class="public-schedule-row"><div class="schedule-date-block"><strong>'+esc(d)+'</strong><span>'+esc(s.time||'')+'</span></div><div class="schedule-info"><span class="schedule-event">'+esc(eventName)+'</span><h3>'+esc(s.title||'Schedule item')+'</h3><p>'+esc([s.venue?('Venue: '+s.venue):'',s.description||''].filter(Boolean).join(' · '))+'</p></div></div>';
   }).join(''):'<div class="schedule-card"><div><b>Schedule coming soon</b><span>The Robotics Club coordinator hasn\'t published a schedule yet.</span></div></div>';
 }
