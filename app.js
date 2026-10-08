@@ -1146,8 +1146,15 @@ window.deleteRegisteredTeam = async function(id) {
     const { data: team, error: lookupError } = await supabaseClient.from('participants').select('id, payment_screenshot_path').eq('id', Number(id)).maybeSingle();
     if (lookupError) throw lookupError;
     if (!team) throw new Error('Registered team not found.');
-    const { error: deleteError } = await supabaseClient.from('participants').delete().eq('id', Number(id));
+    const { data: deletedRows, error: deleteError } = await supabaseClient
+      .from('participants')
+      .delete()
+      .eq('id', Number(id))
+      .select('id');
     if (deleteError) throw deleteError;
+    if (!deletedRows || !deletedRows.length) {
+      throw new Error('The team could not be removed. Check the participants DELETE policy for admin users.');
+    }
     const path = team.payment_screenshot_path;
     if (path && typeof path === 'string' && !path.startsWith('http') && !path.startsWith('data:')) {
       const { error: storageError } = await supabaseClient.storage.from('payment-screenshots').remove([path]);
